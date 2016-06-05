@@ -1,0 +1,1 @@
+service message send & receive，服务（进程）间收发消息API实现代码。
