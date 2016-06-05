@@ -1,0 +1,2 @@
+net lib code，
+网络库（socket、TCP、UDP、epoll机制、连接自动收发消息等等）实现代码。
