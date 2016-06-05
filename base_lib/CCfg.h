@@ -1,4 +1,4 @@
-
+﻿//test only
 /* author : limingfan
  * date : 2014.10.27
  * description : 配置文件解析读取配置项
