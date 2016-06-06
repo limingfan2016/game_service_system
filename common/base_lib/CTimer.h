@@ -65,11 +65,16 @@ namespace NCommon
 		virtual void run();  // 线程实现者重写run
 		int insertTimer(STimerInfo *pTimerInfo);
 		int eraseTimer(unsigned int index);
-		int cmpTimerInfo(STimerInfo *pTimerInfo_1, STimerInfo *pTimerInfo_2)
+		
+		inline int cmpTimerInfo(STimerInfo *pTimerInfo_1, STimerInfo *pTimerInfo_2)
 		{
-			return int(pTimerInfo_1->lastExeTimestamp + pTimerInfo_1->timeGap - pTimerInfo_2->lastExeTimestamp - pTimerInfo_2->timeGap);
+			long long timeVal1 = pTimerInfo_1->lastExeTimestamp + pTimerInfo_1->timeGap;
+			long long timeVal2 = pTimerInfo_2->lastExeTimestamp + pTimerInfo_2->timeGap;
+			return (timeVal1 < timeVal2) ? -1 : 1;
+			// return int(pTimerInfo_1->lastExeTimestamp + pTimerInfo_1->timeGap - pTimerInfo_2->lastExeTimestamp - pTimerInfo_2->timeGap);
 		}
-		void swapTimerInfo(std::vector<STimerInfo*> &m_vTimer, unsigned int indexA, unsigned int indexB)
+		
+		inline void swapTimerInfo(std::vector<STimerInfo*> &m_vTimer, unsigned int indexA, unsigned int indexB)
 		{
 			STimerInfo *tmp = m_vTimer[indexA];
 			m_vTimer[indexA] = m_vTimer[indexB];
