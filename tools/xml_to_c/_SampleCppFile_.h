@@ -188,6 +188,9 @@ struct TestData : public IXmlConfigBase
     map<int, string> int2stringInMap;
     map<string, long> string2longInMap;
     unordered_map<string, outsideStruct> structInMap;
+    vector<string> stringInVector;
+    vector<double> doubleInVector;
+    vector<unsigned int> unsignedIntInVector;
 
     static const TestData& getConfigValue(const char* xmlConfigFile = NULL, bool isReset = false)
     {
@@ -272,6 +275,30 @@ struct TestData : public IXmlConfigBase
         {
             structInMap[CXmlConfig::getKey(_structInMap[i], "key")] = outsideStruct(_structInMap[i]);
         }
+        
+        stringInVector.clear();
+        DomNodeArray _stringInVector;
+        CXmlConfig::getNode(parent, _stringInVector, "stringInVector", "value", "string");
+        for (unsigned int i = 0; i < _stringInVector.size(); ++i)
+        {
+            stringInVector.push_back(CXmlConfig::getValue(_stringInVector[i], "value"));
+        }
+        
+        doubleInVector.clear();
+        DomNodeArray _doubleInVector;
+        CXmlConfig::getNode(parent, _doubleInVector, "doubleInVector", "value", "double");
+        for (unsigned int i = 0; i < _doubleInVector.size(); ++i)
+        {
+            doubleInVector.push_back(CXmlConfig::stringToDouble(CXmlConfig::getValue(_doubleInVector[i], "value")));
+        }
+        
+        unsignedIntInVector.clear();
+        DomNodeArray _unsignedIntInVector;
+        CXmlConfig::getNode(parent, _unsignedIntInVector, "unsignedIntInVector", "value", "unsigned int");
+        for (unsigned int i = 0; i < _unsignedIntInVector.size(); ++i)
+        {
+            unsignedIntInVector.push_back(CXmlConfig::stringToInt(CXmlConfig::getValue(_unsignedIntInVector[i], "value")));
+        }
     }
 
     void output() const
@@ -336,6 +363,24 @@ struct TestData : public IXmlConfigBase
             if (_structInMap_count_++ < (structInMap.size() - 1)) std::cout << endl;
         }
         std::cout << "========== TestData : structInMap ==========\n" << endl;
+        std::cout << "---------- TestData : stringInVector ----------" << endl;
+        for (unsigned int i = 0; i < stringInVector.size(); ++i)
+        {
+            std::cout << "value = " << stringInVector[i] << endl;
+        }
+        std::cout << "========== TestData : stringInVector ==========\n" << endl;
+        std::cout << "---------- TestData : doubleInVector ----------" << endl;
+        for (unsigned int i = 0; i < doubleInVector.size(); ++i)
+        {
+            std::cout << "value = " << doubleInVector[i] << endl;
+        }
+        std::cout << "========== TestData : doubleInVector ==========\n" << endl;
+        std::cout << "---------- TestData : unsignedIntInVector ----------" << endl;
+        for (unsigned int i = 0; i < unsignedIntInVector.size(); ++i)
+        {
+            std::cout << "value = " << unsignedIntInVector[i] << endl;
+        }
+        std::cout << "========== TestData : unsignedIntInVector ==========\n" << endl;
     }
 };
 

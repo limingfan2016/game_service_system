@@ -52,7 +52,8 @@ namespace NCommon
 		~CTimer();
 		
 		int startTimer();
-		//设置定时器，时间单位ms，最小粒度100ms，runCounts 为-1时代表无限次
+		
+		//设置定时器，时间单位ms，最小粒度100ms，runCounts 为-1时代表无限次，返回值 timerId 非0
 		unsigned int setTimer(unsigned int timeGap, CTimerI* pTimerI, void *pParam = (void *)0, unsigned int runCounts = 1);
 		void killTimer(unsigned int timerId);
 		void clearAllTimer();

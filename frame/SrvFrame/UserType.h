@@ -32,7 +32,10 @@ enum ServiceType
 	GameSrvDBProxy = 5,            // 游戏服务逻辑数据DB代理服务
 	MessageSrv = 6,				   // 消息服务
 	ManageSrv = 7,				   // 管理服务
-	LandlordsGameSrv = 8,		   //斗地主
+	LandlordsGameSrv = 8,		   // 斗地主
+	
+	PerformanceTestSrv = 20,	   // 性能压力测试服务
+	
 	GatewayProxySrv = 28,	       // 网关代理服务
 	SimulationClientSrv = 29,      // 仿真客户端服务
 	HttpSrv = 30,                  // Http服务

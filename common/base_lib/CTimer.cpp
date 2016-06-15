@@ -21,7 +21,7 @@ namespace NCommon
 	CTimer::CTimer()
 	{
 		m_isRun = false;
-		m_curTimerId = 1;
+		m_curTimerId = 0;
 		NEW(m_pMemManager, CMemManager(1024, 1024, sizeof(STimerInfo)));
 		NEW(m_pMutex, CMutex(MutexType::recursiveMutexType));
 		m_vTimer.reserve(1024);
@@ -46,12 +46,13 @@ namespace NCommon
 		return rc;
 	}
 
-	//设置定时器，时间单位ms，最小粒度100ms
+	//设置定时器，时间单位ms，最小粒度100ms，返回值 timerId 非0
 	unsigned int CTimer::setTimer(unsigned int timeGap, CTimerI* pTimerI, void *pParam, unsigned int runCounts)
 	{
 		CLock lock(*m_pMutex);
 		STimerInfo *pTimerInfo = (STimerInfo*)m_pMemManager->get();
-		pTimerInfo->timerId = m_curTimerId++;
+		if (++m_curTimerId == 0) m_curTimerId = 1;
+		pTimerInfo->timerId = m_curTimerId;
 		pTimerInfo->pTimerI = pTimerI;
 		pTimerInfo->runCounts = runCounts;
 		if (timeGap < 100)

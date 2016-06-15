@@ -96,9 +96,9 @@
 	    <value type="long" key = "40c">3400000</value>
 	    <value type="long" key = "50e">550000000</value>
 	    <value type="long" key = "abcdefg50e">55333</value>
-	 </string2longInMap>
+	</string2longInMap>
 			
-     <structInMap type="unordered_map" key = "string" value = "outsideStruct">
+    <structInMap type="unordered_map" key = "string" value = "outsideStruct">
 	    <outsideStruct type="struct" key = "abc">
 	        <id type="int">1</id>
 	        <num type="long">12</num>
@@ -110,7 +110,23 @@
 	        <num type="long">123456780</num>
 	        <gold type="double">12003456.789</gold>
 	    </outsideStruct>
-	 </structInMap>
+	</structInMap>
+	 
+	<stringInVector type="vector" value = "string">
+        <value type="string">3100</value>
+		<value type="string">string value input</value>
+	</stringInVector>
+	 
+	<doubleInVector type="vector" value = "double">
+        <value type="double">1003.123</value>
+	    <value type="double">32.0023</value>
+	</doubleInVector>
+	 
+	<unsignedIntInVector type="vector" value = "unsigned int">
+        <value type="unsigned int">54321</value>
+	    <value type="unsigned int">67890</value>
+		<value type="unsigned int">890</value>
+	</unsignedIntInVector>
 
 </TestData>
 

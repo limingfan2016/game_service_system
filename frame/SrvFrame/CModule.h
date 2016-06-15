@@ -20,7 +20,7 @@ namespace NFrame
 
 // 一个模块最多支持处理 MaxProtocolIDCount 个协议
 // 注册的协议ID值不能大于等于 MaxProtocolIDCount
-static const unsigned short MaxProtocolIDCount = 256;
+static const unsigned short MaxProtocolIDCount = 160;
 
 // 协议消息处理者
 class CHandler;
@@ -127,7 +127,7 @@ public:
 	                unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId = 0, unsigned int msgId = 0);
 
 public:
-    // 定时器设置&触发
+    // 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
 	unsigned int setTimer(unsigned int interval, TimerHandler timerHandler, int userId = 0, void* param = NULL, unsigned int count = 1, CHandler* instance = NULL);
 	void killTimer(unsigned int timerId);
 

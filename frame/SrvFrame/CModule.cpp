@@ -242,7 +242,7 @@ int CModule::sendMessage(const char* msgData, const unsigned int msgLen, unsigne
 	return rc;
 }
 
-// 定时器设置&触发
+// 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
 unsigned int CModule::setTimer(unsigned int interval, TimerHandler timerHandler, int userId, void* param, unsigned int count, CHandler* instance)
 {
 	if (instance == NULL) instance = this;

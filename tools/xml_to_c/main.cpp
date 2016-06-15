@@ -28,6 +28,7 @@ static string MainType = "config";
 static const char* MainClass = "main";
 static const char* StructType = "struct";
 static const char* ArrayType = "array";
+static const char* VectorType = "vector";
 static const char* MapType = "map";
 static const char* UnorderMapType = "unordered_map";
 static const char* TypeTag = "type";
@@ -35,14 +36,17 @@ static const char* NameTag = "name";
 static const char* IncludeTag = "include";
 
 
+// 变量类型
 enum VariableType
 {
 	BaseVar = 0,
 	ArrayVar = 1,
-	MapVar = 2,
-	StructVar = 3,
+	VectorVar = 2,
+	MapVar = 3,
+	StructVar = 4,
 };
 
+// C++ 定义类型
 struct CppType
 {
 	CppType(const string& t, const string& n, const string& v, const string& k, VariableType vType) : type(t), name(n), value(v), key(k), varType(vType) {};
@@ -54,11 +58,13 @@ struct CppType
 	VariableType varType;
 };
 
+// 数据类struct的属性列表
 struct XmlStructType
 {
 	vector<CppType> attributeList;
 };
 
+// 数据类struct名称到定义的映射
 typedef unordered_map<string, XmlStructType> StructName2Define;
 
 
@@ -104,6 +110,7 @@ public:
 
 		try
 		{
+			// 解析XML文件内容
 			m_DOMXmlParser->parse(xmlFile) ;
 			DOMDocument* xmlDoc = m_DOMXmlParser->getDocument();
 			DOMElement* pRoot = xmlDoc->getDocumentElement();  // 取得根结点
@@ -113,6 +120,7 @@ public:
 				return false;
 			}
 
+			// 根据XML文件内容的定义生成 C++ 数据类型
 			makeCppType((DOMNode*)pRoot, string());
 		}
 		catch(XMLException& excp)
@@ -126,6 +134,7 @@ public:
 		return !m_name.empty() && !m_include.empty();
 	}
 	
+	// 生成数据类定义文件
 	string outputToFile(const char* filePath)
 	{
 		if (m_name.empty())
@@ -164,11 +173,12 @@ public:
 	
 		// 文件struct定义体
 		string attribute;
-		vector<string> setAttributes;
-		vector<string> outputAttributes;
+		vector<string> setAttributes;       // set函数体代码
+		vector<string> outputAttributes;    // ouput函数体代码
 
 		for (vector<string>::reverse_iterator rStructName = m_structNames.rbegin(); rStructName != m_structNames.rend(); rStructName++)
 		{
+			// struct 定义
 			StructName2Define::iterator structIt = m_structName2Define.find(*rStructName);
 			if (structIt->first != MainType) fileInstance << "struct " << structIt->first << "\n{" << endl;
 			else fileInstance << "struct " << structIt->first << " : public IXmlConfigBase\n{" << endl;
@@ -176,7 +186,7 @@ public:
 			for (unsigned int idx = 0; idx < structIt->second.attributeList.size(); ++idx)
 			{
 				const CppType& attributeInfo = structIt->second.attributeList[idx];
-				if (attributeInfo.varType == BaseVar)
+				if (attributeInfo.varType == BaseVar)  // 基本类型
 				{
 					fileInstance << "    " << attributeInfo.type << " " << attributeInfo.name << ";" << endl;
 					
@@ -189,6 +199,7 @@ public:
 					attribute = "std::cout << \"" + structIt->first + " : " + attributeInfo.name + " = \" << " + attributeInfo.name + " << endl;";
 					outputAttributes.push_back(attribute);
 				}
+				
 				else if (attributeInfo.varType == StructVar)
 				{
 					fileInstance << "    " << attributeInfo.name << " " << attributeInfo.value << ";" << endl;
@@ -211,6 +222,7 @@ public:
 					attribute = "std::cout << \"========== " + structIt->first + " : " + attributeInfo.value + " ==========\\n\" << endl;";
 					outputAttributes.push_back(attribute);
 				}
+				
 				else if (attributeInfo.varType == MapVar)
 				{
 					fileInstance << "    " << attributeInfo.type << "<" << attributeInfo.key << ", " << attributeInfo.value << "> " << attributeInfo.name << ";" << endl;
@@ -229,6 +241,7 @@ public:
 						attribute = "CXmlConfig::getNode(parent, " + arrayName + ", \"" + attributeInfo.name + "\", \"" + attributeInfo.value + "\");";
 					setAttributes.push_back(attribute);
 					
+					// map 的 key & value 形式
 					string keyString;
 					if (attributeInfo.key == "string")
 						keyString = attributeInfo.name + "[CXmlConfig::getKey(" + arrayName + "[i], " + "\"key\")] = ";
@@ -283,6 +296,7 @@ public:
 					attribute = "std::cout << \"========== " + structIt->first + " : " + attributeInfo.name + " ==========\\n\" << endl;";
 					outputAttributes.push_back(attribute);
 				}
+				
 				else if (attributeInfo.varType == ArrayVar)
 				{
 					fileInstance << "    " << "vector<" << attributeInfo.type << "> " << attributeInfo.name << ";" << endl;
@@ -310,8 +324,48 @@ public:
 					attribute = "std::cout << \"========== " + structIt->first + " : " + attributeInfo.name + " ==========\\n\" << endl;";
 					outputAttributes.push_back(attribute);
 				}
+				
+				else if (attributeInfo.varType == VectorVar && isBaseType(attributeInfo.value))
+				{
+					fileInstance << "    " << attributeInfo.type << "<" << attributeInfo.value << "> " << attributeInfo.name << ";" << endl;
+					
+					attribute = (idx == 0) ? "" : "\n        ";
+					attribute = attribute + attributeInfo.name + ".clear();";
+					setAttributes.push_back(attribute);
+					
+					string arrayName = "_" + attributeInfo.name;
+					attribute = "DomNodeArray " + arrayName + ";";
+					setAttributes.push_back(attribute);
+					
+					attribute = "CXmlConfig::getNode(parent, " + arrayName + ", \"" + attributeInfo.name + "\", \"value\"" + ", \"" + attributeInfo.value + "\");";
+					setAttributes.push_back(attribute);
+					
+					string valueString;
+					if (attributeInfo.value == "string")
+						valueString = "CXmlConfig::getValue(" + arrayName + "[i], " + "\"value\"));";
+				    else if (attributeInfo.value == "int" || attributeInfo.value == "unsigned int")
+						valueString = "CXmlConfig::stringToInt(CXmlConfig::getValue(" + arrayName + "[i], " + "\"value\")));";
+					else if (attributeInfo.value == "long" || attributeInfo.value == "unsigned long")
+						valueString = "CXmlConfig::stringToLong(CXmlConfig::getValue(" + arrayName + "[i], " + "\"value\")));";
+					else if (attributeInfo.value == "double")
+						valueString = "CXmlConfig::stringToDouble(CXmlConfig::getValue(" + arrayName + "[i], " + "\"value\")));";
+						
+					attribute = "for (unsigned int i = 0; i < " + arrayName + ".size(); ++i)\n        {\n            " \
+					            + attributeInfo.name + ".push_back(" + valueString + "\n        }";
+					setAttributes.push_back(attribute);
+					
+					attribute = "std::cout << \"---------- " + structIt->first + " : " + attributeInfo.name + " ----------\" << endl;";
+					outputAttributes.push_back(attribute);
+					
+					attribute = "for (unsigned int i = 0; i < " + attributeInfo.name + ".size(); ++i)\n        {\n            " \
+					            + "std::cout << \"value = \" << " + attributeInfo.name + "[i] << endl;\n        }";
+					outputAttributes.push_back(attribute);
+					attribute = "std::cout << \"========== " + structIt->first + " : " + attributeInfo.name + " ==========\\n\" << endl;";
+					outputAttributes.push_back(attribute);
+				}
 			}
 
+            // struct 的构造函数体
 	        if (structIt->first != MainType)
 			{
 			    fileInstance << "\n    " << structIt->first << "() {};" << endl;
@@ -407,6 +461,7 @@ private:
 				m_structNames.push_back(strName);
 			}
 
+			// struct 数据类定义&属性
 			if (m_structName2Define.find(parentNode) != m_structName2Define.end())
 			{
 				bool isFind = false;
@@ -430,6 +485,11 @@ private:
 						varType = ArrayVar;
 						DOMNodeList* nodeList = node->getChildNodes();
 						if (nodeList->getLength() > 1) charArrayToString(nodeList->item(1)->getNodeName(), type);
+					}
+					else if (type == VectorType)
+					{
+						varType = VectorVar;
+						getAttribute(node, "value", value);
 					}
 					else if (type == StructType)
 					{
@@ -519,9 +579,9 @@ int main(int argc, char* argv[])
 	}
 	
 	CXmlToCPP xml2cpp;
-	if (xml2cpp.xmlParser(argv[1]))
+	if (xml2cpp.xmlParser(argv[1]))  // 构造C++数据类型定义
 	{
-    	string fileName = xml2cpp.outputToFile(argv[2]);
+    	string fileName = xml2cpp.outputToFile(argv[2]);  // 生成C++数据类型定义文件
 		if (!fileName.empty()) printf("change xml config to c++ file finish, xml file = %s, c++ file = %s\n", argv[1], fileName.c_str());
 	}
 	else

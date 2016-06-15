@@ -103,7 +103,7 @@ public:
     void setConnectClient();
 	
 public:	
-    // 定时器设置
+    // 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
 	unsigned int setTimer(CHandler* handler, unsigned int interval, TimerHandler cbFunc, int userId = 0, void* param = NULL, unsigned int count = 1);
 	void killTimer(unsigned int timerId);
 	

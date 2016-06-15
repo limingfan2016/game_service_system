@@ -490,7 +490,8 @@ void CService::notifyUpdateConfig()
 {
 	m_isNotifyUpdateConfig = true;
 }
-	
+
+// 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
 unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerHandler cbFunc, int userId, void* param, unsigned int count)
 {
 	++srvStatData.setTimerMsgs;
@@ -516,7 +517,7 @@ unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerH
 		ReleaseWarnLog("set timer failed, timer online message count already to max = %d", m_timerMsgMaxCount);
 	}
 	
-	return (unsigned int)-1;  // 表示setTimer失败
+	return 0;  // 表示setTimer失败
 }
 
 void CService::killTimer(unsigned int timerId)
@@ -819,10 +820,10 @@ int CService::sendMessage(const unsigned short srcServiceType, const unsigned in
 	    srvStatData.sendSrvMsgSize -= (sendMsgData - m_sndMsg);
 		++srvStatData.sendSrvMsgFaileds;
 		
-		static char logMsg[MaxMsgLen] = {0};
-		b2str(m_sndMsg, sendMsgData - m_sndMsg, logMsg, MaxMsgLen);
-		ReleaseErrorLog("send message to service failed, rc = %d, id = %d, protocol = %d, module = %d, data = %s, len = %d",
-		rc, dstServiceId, dstProtocolId, dstModuleId, logMsg, sendMsgData - m_sndMsg);
+		// static char logMsg[MaxMsgLen] = {0};
+		// b2str(m_sndMsg, sendMsgData - m_sndMsg, logMsg, MaxMsgLen);
+		ReleaseErrorLog("send message to service failed, rc = %d, id = %d, protocol = %d, module = %d, len = %d",
+		rc, dstServiceId, dstProtocolId, dstModuleId, sendMsgData - m_sndMsg);
 	}
 
 	return rc;
@@ -867,9 +868,9 @@ int CService::sendMsgToClient(const char* msgData, const unsigned int msgLen, un
 	    srvStatData.sendCltMsgSize -= pkgLen;
 		++srvStatData.sendCltMsgFaileds;
 		
-		static char logMsg[MaxMsgLen] = {0};
-		b2str(m_sndMsg, pkgLen, logMsg, MaxMsgLen);
-		ReleaseErrorLog("send message to net client failed, rc = %d, protocol = %d, pkg len = %d, data = %s", rc, protocolId, pkgLen, logMsg);
+		// static char logMsg[MaxMsgLen] = {0};
+		// b2str(m_sndMsg, pkgLen, logMsg, MaxMsgLen);
+		ReleaseErrorLog("send message to net client failed, rc = %d, protocol = %d, pkg len = %d", rc, protocolId, pkgLen);
 	}
 	
 	return rc;
@@ -935,10 +936,10 @@ int CService::sendMsgToProxy(const char* msgData, const unsigned int msgLen, uns
 	    srvStatData.sendCltMsgSize -= (MsgHeaderLen + msgLen);
 		++srvStatData.sendCltMsgFaileds;
 		
-		static char logMsg[MaxMsgLen] = {0};
-		b2str(m_sndMsg, MsgHeaderLen + msgLen, logMsg, MaxMsgLen);
-		ReleaseErrorLog("send message to proxy failed, rc = %d, id = %d, protocol = %d, module = %d, data = %s, len = %d",
-		rc, conn->proxyId, protocolId, moduleId, logMsg, MsgHeaderLen + msgLen);
+		// static char logMsg[MaxMsgLen] = {0};
+		// b2str(m_sndMsg, MsgHeaderLen + msgLen, logMsg, MaxMsgLen);
+		ReleaseErrorLog("send message to proxy failed, rc = %d, id = %d, protocol = %d, module = %d, len = %d",
+		rc, conn->proxyId, protocolId, moduleId, MsgHeaderLen + msgLen);
 	}
 
 	return rc;
@@ -972,8 +973,8 @@ void CService::closeProxy(const uuid_type id, bool isActive)
 	int rc = 0;
 	if (isActive) rc = sendMessage(NULL, 0, NULL, 0, NULL, 0, conn->proxyId, 0, 0, 0, ConnectProxyOperation::ActiveClosed, conn->proxyFlag);
 	
-	ReleaseWarnLog("%s close connect proxy, peer ip = %s, port = %d, id = %d, flag = %d, proxyId = %lld, connProxy = %p, rc = %d", isActive ? "active" : "passive",
-			       NConnect::CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->proxyId, conn->proxyFlag, id, conn, rc);
+	ReleaseWarnLog("%s close connect proxy, peer ip = %s, port = %d, id = %d, flag = %d, proxyId = %lld, connProxy = %p, userCb = %p, rc = %d", isActive ? "active" : "passive",
+			       NConnect::CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->proxyId, conn->proxyFlag, id, conn, userCb, rc);
 
 	// 4、最后才回收资源
 	// 回收资源
