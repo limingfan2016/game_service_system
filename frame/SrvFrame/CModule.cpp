@@ -39,7 +39,6 @@ CModule::CModule()
 	m_moduleId = (unsigned short)-1;
     m_service = &getService();
 	memset(&m_context, 0, sizeof(m_context));
-	memset(m_protocolHanders, 0, sizeof(m_protocolHanders));
 	
 	m_srvMsgCommCfg = NULL;
 	m_connectMgr = NULL;
@@ -52,7 +51,6 @@ CModule::~CModule()
 	m_moduleId = (unsigned short)-1;
     m_service = NULL;
 	memset(&m_context, 0, sizeof(m_context));
-	memset(m_protocolHanders, 0, sizeof(m_protocolHanders));
 	
 	m_srvMsgCommCfg = NULL;
 	m_connectMgr = NULL;
@@ -86,29 +84,25 @@ int CModule::onServiceMessage(const char* msgData, const unsigned int msgLen, co
 		return InvalidParam;
 	}
 	
-	CHandler* instance = NULL;
-	ProtocolHandler handler = NULL;
+	const ProtocolIdToHandler* protocolHandler = NULL;
+	ProtocolIdToHandler::const_iterator handlerIt;
 	if (dstProtocolId < MaxProtocolIDCount)
 	{
-		MsgHandler& msgHandler = m_protocolHanders[srcSrvType][dstProtocolId];
-		if (msgHandler.handler == NULL) msgHandler = m_protocolHanders[CommonSrv][dstProtocolId];  // 默认取公共协议
-		if (msgHandler.handler != NULL)
+		protocolHandler = &m_protocolHanders[srcSrvType];
+		handlerIt = protocolHandler->find(dstProtocolId);
+		if (handlerIt == protocolHandler->end() || handlerIt->second.handler == NULL)
 		{
-			instance = msgHandler.instance;
-			handler = msgHandler.handler;
+			protocolHandler = &m_protocolHanders[CommonSrv];  // 默认取公共协议
+			handlerIt = protocolHandler->find(dstProtocolId);
 		}
 	}
 	else
 	{
-		ProtocolIdToHandler::const_iterator handlerIt = m_serviceProtocolHandler.find(dstProtocolId);
-		if (handlerIt != m_serviceProtocolHandler.end() && handlerIt->second.handler != NULL)
-		{
-			instance = handlerIt->second.instance;
-			handler = handlerIt->second.handler;
-		}
+		protocolHandler = &m_serviceProtocolHandler;
+		handlerIt = protocolHandler->find(dstProtocolId);
 	}
 	
-	if (instance == NULL)
+	if (handlerIt == protocolHandler->end() || handlerIt->second.instance == NULL || handlerIt->second.handler == NULL)
 	{
 		ReleaseErrorLog("can not find the protocol handler, srcServiceId = %d, srcServiceType = %d, dstProtocolId = %d", srcSrvId, srcSrvType, dstProtocolId);
 		return NoFoundProtocolHandler;
@@ -133,7 +127,7 @@ int CModule::onServiceMessage(const char* msgData, const unsigned int msgLen, co
 	
 	// 业务逻辑处理消息
 	m_msgType = MessageType::InnerServiceMsg;
-	(instance->*handler)(msgData, msgLen, srcSrvId, srcModuleId, srcProtocolId);
+	(handlerIt->second.instance->*(handlerIt->second.handler))(msgData, msgLen, srcSrvId, srcModuleId, srcProtocolId);
 	
 	m_context.dstProtocolId = (unsigned short)-1;
 	m_context.userData[0] = '\0';
@@ -188,6 +182,7 @@ int CModule::registerProtocol(ServiceType srcSrvType, unsigned short protocolId,
 	MsgHandler* msgHandler = NULL;
 	if (protocolId < MaxProtocolIDCount)
 	{
+		m_protocolHanders[srcSrvType][protocolId] = MsgHandler();
 		msgHandler = &(m_protocolHanders[srcSrvType][protocolId]);
 	}
 	else

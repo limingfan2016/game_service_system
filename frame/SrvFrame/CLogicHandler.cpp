@@ -19,7 +19,7 @@ namespace NFrame
 CLogicHandler::CLogicHandler()
 {
 	memset(&m_connectProxyContext, 0, sizeof(m_connectProxyContext));
-	m_proxyProtocolHanders = m_protocolHanders[OutsideClientSrv];
+	m_proxyProtocolHanders = &m_protocolHanders[OutsideClientSrv];
 }
 
 CLogicHandler::~CLogicHandler()
@@ -48,7 +48,7 @@ int CLogicHandler::onProxyMessage(const char* msgData, const unsigned int msgLen
 		return InvalidParam;
 	}
 	
-	const MsgHandler& msgHandler = m_proxyProtocolHanders[protocolId];
+	const MsgHandler& msgHandler = (*m_proxyProtocolHanders)[protocolId];
 	if (msgHandler.handler == NULL)
 	{
 		ReleaseErrorLog("not find the protocol handler for proxy msg, protocolId = %d", protocolId);

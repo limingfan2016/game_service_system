@@ -20,7 +20,7 @@ namespace NFrame
 
 // 一个模块最多支持处理 MaxProtocolIDCount 个协议
 // 注册的协议ID值不能大于等于 MaxProtocolIDCount
-static const unsigned short MaxProtocolIDCount = 160;
+static const unsigned short MaxProtocolIDCount = 8192;
 
 // 协议消息处理者
 class CHandler;
@@ -158,8 +158,7 @@ private:
 
 
 protected:
-    MsgHandler m_protocolHanders[MaxServiceType][MaxProtocolIDCount];
-	ProtocolIdToHandler m_serviceProtocolHandler;
+    ProtocolIdToHandler m_protocolHanders[MaxServiceType];
 	
 	CService* m_service;
 	CConnectMgr* m_connectMgr;
@@ -168,6 +167,8 @@ protected:
 	CCfg* m_srvMsgCommCfg;  // 服务间消息通信配置信息
 
 private:
+    ProtocolIdToHandler m_serviceProtocolHandler;
+	
     unsigned short m_moduleId;
 	Context m_context;
 

@@ -92,7 +92,7 @@ private:
 
 private:
     ConnectProxyContext m_connectProxyContext;
-    MsgHandler* m_proxyProtocolHanders;
+    ProtocolIdToHandler* m_proxyProtocolHanders;
 	
 	
 	friend class CService;

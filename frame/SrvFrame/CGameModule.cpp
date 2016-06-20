@@ -19,7 +19,7 @@ namespace NFrame
 CGameModule::CGameModule()
 {
 	memset(&m_netClientContext, 0, sizeof(m_netClientContext));
-	m_clientProtocolHanders = m_protocolHanders[OutsideClientSrv];
+	m_clientProtocolHanders = &m_protocolHanders[OutsideClientSrv];
 }
 
 CGameModule::~CGameModule()
@@ -38,7 +38,7 @@ int CGameModule::onClientMessage(const char* msgData, const unsigned int msgLen,
 		return InvalidParam;
 	}
 	
-	const MsgHandler& msgHandler = m_clientProtocolHanders[protocolId];
+	const MsgHandler& msgHandler = (*m_clientProtocolHanders)[protocolId];
 	if (msgHandler.handler == NULL)
 	{
 		ReleaseErrorLog("not find the protocol handler for net client msg, protocolId = %d", protocolId);

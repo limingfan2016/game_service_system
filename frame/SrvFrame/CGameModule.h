@@ -53,7 +53,7 @@ private:
 	
 private:
 	NetClientContext m_netClientContext;
-    MsgHandler* m_clientProtocolHanders;
+    ProtocolIdToHandler* m_clientProtocolHanders;
 
 
 DISABLE_COPY_ASSIGN(CGameModule);
