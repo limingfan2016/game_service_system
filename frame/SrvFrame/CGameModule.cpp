@@ -37,9 +37,9 @@ int CGameModule::onClientMessage(const char* msgData, const unsigned int msgLen,
 		ReleaseErrorLog("receive net client msg error, protocolId = %d", protocolId);
 		return InvalidParam;
 	}
-	
-	const MsgHandler& msgHandler = (*m_clientProtocolHanders)[protocolId];
-	if (msgHandler.handler == NULL)
+
+	ProtocolIdToHandler::const_iterator handlerIt = m_clientProtocolHanders->find(protocolId);
+	if (handlerIt == m_clientProtocolHanders->end() || handlerIt->second.handler == NULL)
 	{
 		ReleaseErrorLog("not find the protocol handler for net client msg, protocolId = %d", protocolId);
 		return NoFoundProtocolHandler;
@@ -54,7 +54,7 @@ int CGameModule::onClientMessage(const char* msgData, const unsigned int msgLen,
 	
 	// 业务逻辑处理消息
 	m_msgType = MessageType::NetClientMsg;
-	(msgHandler.instance->*msgHandler.handler)(msgData, msgLen, serviceId, moduleId, protocolId);
+	(handlerIt->second.instance->*(handlerIt->second.handler))(msgData, msgLen, serviceId, moduleId, protocolId);
 
 	m_netClientContext.protocolId = (unsigned short)-1;
 	m_netClientContext.msgId = (unsigned int)-1;

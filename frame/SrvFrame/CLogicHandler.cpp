@@ -47,9 +47,9 @@ int CLogicHandler::onProxyMessage(const char* msgData, const unsigned int msgLen
 		ReleaseErrorLog("receive proxy msg error, protocolId = %d", protocolId);
 		return InvalidParam;
 	}
-	
-	const MsgHandler& msgHandler = (*m_proxyProtocolHanders)[protocolId];
-	if (msgHandler.handler == NULL)
+
+	ProtocolIdToHandler::const_iterator handlerIt = m_proxyProtocolHanders->find(protocolId);
+	if (handlerIt == m_proxyProtocolHanders->end() || handlerIt->second.handler == NULL)
 	{
 		ReleaseErrorLog("not find the protocol handler for proxy msg, protocolId = %d", protocolId);
 		return NoFoundProtocolHandler;
@@ -66,7 +66,7 @@ int CLogicHandler::onProxyMessage(const char* msgData, const unsigned int msgLen
 	
 	// 业务逻辑处理消息
 	m_msgType = MessageType::ConnectProxyMsg;
-	(msgHandler.instance->*msgHandler.handler)(msgData, msgLen, serviceId, moduleId, protocolId);
+	(handlerIt->second.instance->*(handlerIt->second.handler))(msgData, msgLen, serviceId, moduleId, protocolId);
 
 	m_connectProxyContext.protocolId = (unsigned short)-1;
 	m_connectProxyContext.msgId = (unsigned int)-1;
