@@ -137,6 +137,7 @@ void CSrvMsgComm::run()
 	cfgData.step = cfgData.count;                 // 自动分配的内存块个数
 	cfgData.size = atoi(CCfg::getValue("NetConnect", "MsgQueueSize"));                 // 每个读写数据区内存块的大小
 	cfgData.activeInterval = atoi(CCfg::getValue("NetConnect", "ActiveTimeInterval"));       // 连接活跃检测间隔时间，单位秒，超过此间隔时间无数据则关闭连接
+	cfgData.checkTimes = atoi(CCfg::getValue("NetConnect", "CheckNoDataTimes"));             // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	cfgData.hbInterval = atoi(CCfg::getValue("NetConnect", "HBInterval"));           // 心跳检测间隔时间，单位秒
 	cfgData.hbFailedTimes = atoi(CCfg::getValue("NetConnect", "HBFailTimes"));        // 心跳检测连续失败hbFailedTimes次后关闭连接
 	int rc = connectManager.start(cfgData);
@@ -367,6 +368,7 @@ int CSrvMsgComm::initCfgFile(const char* cfgFile)
 		"\n// 网络连接配置项，各项值必须大于1，否则配置错误\n",
         "[NetConnect]\n",
 		"ActiveTimeInterval = 604800    // 连接活跃检测间隔时间，单位秒，超过此间隔时间无数据则关闭连接\n",
+		"CheckNoDataTimes = 600         // 检查最大socket无数据的次数（每秒检测一次），超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接",
 		"HBInterval = 3600              // 心跳检测间隔时间，单位秒\n",
 		"HBFailTimes = 10               // 心跳检测连续失败HBFailTimes次后关闭连接\n",
 		"MsgQueueSize = 2097152         // 连接消息队列的大小，最小值必须大于等于1024\n",
@@ -424,7 +426,7 @@ int CSrvMsgComm::initCfgFile(const char* cfgFile)
 	if (rc != Success) return rc;
 	
 	// NetConnect 配置项值检查
-	const char* netConnectCfg[] = {"MsgQueueSize", "ActiveTimeInterval", "HBInterval", "HBFailTimes", "ConnectCount",};
+	const char* netConnectCfg[] = {"MsgQueueSize", "ActiveTimeInterval", "CheckNoDataTimes", "HBInterval", "HBFailTimes", "ConnectCount",};
 	for (int i = 0; i < (int)(sizeof(netConnectCfg) / sizeof(netConnectCfg[0])); ++i)
 	{
 		const char* value = CCfg::getValue("NetConnect", netConnectCfg[i]);

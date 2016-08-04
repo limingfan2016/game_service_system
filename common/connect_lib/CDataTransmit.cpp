@@ -52,6 +52,9 @@ ReturnValue CDataTransmit::recv(Connect*& conn, char* data, unsigned int& len)
 			dataSize = CDataHandler::getCanReadDataSize(m_curConn);  // 当前可以从连接读取的数据量
 			if (dataSize > 0)
 			{
+				m_connMgr->addToMsgQueue(m_curConn, ConnectOpt::EAddToQueue);  // 正常则加入消息队列
+				m_connMgr->setConnectNormal(m_curConn);                        // 有数据则填写活跃时间点
+				
 				if (dataSize > len) dataSize = len;
 				len = CDataHandler::read(m_curConn, data, dataSize);
 				

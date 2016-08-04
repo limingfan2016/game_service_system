@@ -31,9 +31,6 @@ namespace NConnect
 static const unsigned int MinErrorActiveConnectIntervalSecs = 6;
 static const unsigned int MaxErrorActiveConnectIntervalSecs = 60;
 
-// 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
-static const unsigned short MaxCheckTimesOfNoSocketData = 60;
-
 
 // 忽略管道SIGPIPE信号
 static void SignalHandler(int sigNum, siginfo_t* sigInfo, void* context)
@@ -57,6 +54,7 @@ CConnectManager::CConnectManager(const char* ip, const int port, ILogicHandler* 
 	m_hbInterval = 0;           // 心跳检测间隔时间，单位秒
 	m_hbFailedTimes = 0;        // 心跳检测连续失败hbFailedTimes次后关闭连接
 	m_activeInterval = 0;       // 活跃检测间隔时间，单位秒
+	m_checkTimes = 0;           // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	
 	m_status = 0;
 	m_synNotify.status = parallel;
@@ -85,12 +83,13 @@ int CConnectManager::doStart(const ServerCfgData& cfgData)
 {
 	const unsigned int minSize = 1024;  // 缓冲区最小长度
 	
-	ReleaseInfoLog("server start memory pool count = %d, step = %d, size = %d, minSize = %d, listenNum = %d, hbInterval = %d, hbFailedTimes = %d, activeInterval = %d, connect object cache = %d.",
+	ReleaseInfoLog("server start memory pool count = %d, step = %d, size = %d, minSize = %d, listenNum = %d, hbInterval = %d, hbFailedTimes = %d, checkTimes = %d, activeInterval = %d, connect object cache = %d.",
 	cfgData.count, cfgData.step, cfgData.size, minSize, cfgData.listenNum,
-    cfgData.hbInterval, cfgData.hbFailedTimes, cfgData.activeInterval, cfgData.listenMemCache);
+    cfgData.hbInterval, cfgData.hbFailedTimes, cfgData.checkTimes, cfgData.activeInterval, cfgData.listenMemCache);
 	
+	// 参数合法性检查
 	if (m_logicHandler == NULL || cfgData.listenMemCache <= 1 || cfgData.count <= 1 || cfgData.step <= 1 || cfgData.size < minSize
-	    || cfgData.listenNum <= 1 || cfgData.hbInterval <= 1 || cfgData.hbFailedTimes < 1 || cfgData.activeInterval <= 1) return InvalidParam;
+	    || cfgData.listenNum <= 1 || cfgData.hbInterval <= 1 || cfgData.hbFailedTimes < 1 || cfgData.activeInterval <= 1 || cfgData.checkTimes <= 1) return InvalidParam;
 	
     NEW(m_connMemory, CMemManager(cfgData.listenMemCache, cfgData.listenMemCache, sizeof(Connect)));  // 创建连接使用的内存池
 	if (m_connMemory == NULL) return CreateMemPoolFailed;
@@ -113,6 +112,7 @@ int CConnectManager::doStart(const ServerCfgData& cfgData)
 	m_hbInterval = cfgData.hbInterval;
 	m_hbFailedTimes = cfgData.hbFailedTimes;
 	m_activeInterval = cfgData.activeInterval;
+	m_checkTimes = cfgData.checkTimes;
 	ReleaseInfoLog("server start success.");
 	
 	return Success;
@@ -246,6 +246,7 @@ void CConnectManager::clear()
 	m_hbInterval = 0;         // 心跳检测间隔时间，单位秒
 	m_hbFailedTimes = 0;      // 心跳检测连续失败hbFailedTimes次后关闭连接
 	m_activeInterval = 0;     // 活跃检测间隔时间，单位秒
+	m_checkTimes = 0;         // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	m_status = 0;
 	m_synNotify.status = parallel;
 	
@@ -595,16 +596,22 @@ void CConnectManager::addInitedConnect(Connect* conn)
 	ReleaseInfoLog("init message connect, ip = %s, port = %d, id = %lld\n", CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->id);
 }
 
-void CConnectManager::addToMsgQueue(Connect* conn)
+void CConnectManager::addToMsgQueue(Connect* conn, const ConnectOpt opt)
 {
 	if (conn->readSocketTimes > 0)
 	{
-		conn->readSocketTimes = 1;  // 已经在队列中了，则重新开始计算即可
+		if (opt == ConnectOpt::EAddToQueue) conn->readSocketTimes = 1;  // 已经在队列中了，则重新开始计算即可
 		return;
 	}
+
+	// readSocketTimes的值为 1 则表示该连接加入消息队列
+	// 值为 0 则表示已经被移出消息队列
+	// 此时重新收到数据，则先把该值设置为 (m_checkTimes + 1)
+	// 应用层读取数据，解析后的如果数据是应用层消息，则再把该连接的readSocketTimes值重置为1即可，表示正常加入消息队列
+	// 解析后如果只是控制类消息包，如心跳消息则不会重置readSocketTimes的值，不会重置活跃时间等
+	conn->readSocketTimes = (opt == ConnectOpt::EAddToQueue) ? 1 : (m_checkTimes + 1);
 	
 	// 加入消息队列
-	conn->readSocketTimes = 1;
 	if (m_msgConnectList != NULL)
 	{
 		conn->pNext = m_msgConnectList;
@@ -624,7 +631,7 @@ void CConnectManager::removeFromMsgQueue(Connect* conn)
 {
 	if (conn->readSocketTimes > 0)
 	{
-		conn->readSocketTimes = 0;
+		conn->readSocketTimes = 0;              // 值为 0 表示该连接已经从消息队列删除
 		removeConnect(m_msgConnectList, conn);  // 从队列删除
 	}
 }
@@ -739,16 +746,21 @@ void CConnectManager::handleConnect()
 				CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, hbResult, cfgHbTimes, curSecs - msgConn->activeSecs, m_activeInterval);
 				closeConnect(msgConn);
 			}
-			
-			// 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
-			else if (msgConn->readSocketTimes > MaxCheckTimesOfNoSocketData)
-			{
-				SynWaitNotify sysWaitNotifyHepler(this);
-				removeFromMsgQueue(msgConn);  // 从消息队列删除
-			}
 			else if (msgConn->readSocketTimes > 0 && CDataHandler::getCanReadDataSize(msgConn) == 0)
 			{
-				++msgConn->readSocketTimes;
+				// 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
+				if (msgConn->readSocketTimes > m_checkTimes)
+				{
+					// ReleaseWarnLog("remove connect from message queue, ip = %s, port = %d, logicId = %lld, check times = %d",
+					// CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, m_checkTimes);
+					
+					SynWaitNotify sysWaitNotifyHepler(this);
+					removeFromMsgQueue(msgConn);  // 从消息队列删除
+				}
+				else
+				{
+			        ++msgConn->readSocketTimes;
+				}
 			}
 		}
 		
@@ -778,7 +790,7 @@ void CConnectManager::closeConnect(Connect* conn)
 		// 成功建立了的连接才会回调关闭
 		if (conn->id != 0) m_logicHandler->onClosedConnect(conn, conn->userCb);  // 通知逻辑层connLogicId对应的连接已被关闭
 		
-		if (conn->writeBuff != NULL) addToMsgQueue(conn);  // 有资源没释放要加回消息队列等待数据处理线程释放资源，之后才能销毁连接
+		if (conn->writeBuff != NULL) addToMsgQueue(conn, ConnectOpt::EAddToQueue);  // 有资源没释放要加回消息队列等待数据处理线程释放资源，之后才能销毁连接
 		else if (conn->readSocketTimes == 0) conn->logicStatus = deleted;
 	}
 }
@@ -891,8 +903,8 @@ bool CConnectManager::readFromConnect(Connect* conn)
 	int nRead = ::read(conn->fd, firstBuff, firstLen);  // 读数据到第一块内存
 	if (nRead > 0)
 	{
-		addToMsgQueue(conn);        // 有数据则加入消息处理队列
-		setConnectNormal(conn);     // 读数据成功则连接一般情况下都正常
+		addToMsgQueue(conn, ConnectOpt::ENeedReadData);        // 有数据则加入消息处理队列，让应用上层读取数据
+		// setConnectNormal(conn);                             // 读数据成功则连接一般情况下都正常
 		
 		readBuff->endWriteBuff(firstBuff, nRead, NULL, 0);  // 成功则提交数据
 		if ((unsigned int)nRead < firstLen) return true;  // 数据已经读完
@@ -967,7 +979,7 @@ bool CConnectManager::writeToConnect(Connect* conn)
 	int nWrite = ::write(conn->fd, firstBuff, firstLen);
 	if (nWrite > 0)
 	{
-		setConnectNormal(conn);  // 写数据成功则连接一般情况下都正常
+		// setConnectNormal(conn);  // 写数据成功则连接一般情况下都正常（网络、路由等断开数据写入操作检测不出来，只能靠心跳消息检测）
 		
 		curWriteIdx->endReadBuff(firstBuff, nWrite, NULL, 0);  // 成功则提交数据
 		if ((unsigned int)nWrite < firstLen)

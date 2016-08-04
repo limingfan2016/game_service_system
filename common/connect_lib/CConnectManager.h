@@ -18,6 +18,13 @@
 namespace NConnect
 {
 
+// 对已经建立、初始化好了的连接的操作
+enum ConnectOpt
+{
+	EAddToQueue = 1,                // 加入消息队列，可以从该连接读取数据
+	ENeedReadData = 2,              // 该连接检测到有数据可读，应用层需要从该连接读取数据
+};
+
 typedef std::unordered_map<uuid_type, unsigned int> NodeIdToTimeSecs;
 typedef std::unordered_map<uuid_type, Connect*> IdToConnect;
 
@@ -33,6 +40,7 @@ struct ServerCfgData
 	
 	int listenNum;                  // 监听连接的队列长度
 	int activeInterval;             // 连接活跃检测间隔时间，单位秒，超过次间隔时间无数据则关闭连接
+    unsigned short checkTimes;      // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	unsigned short hbInterval;      // 心跳检测间隔时间，单位秒
 	unsigned char hbFailedTimes;    // 心跳检测连续失败hbFailedTimes次后关闭连接
 };
@@ -76,7 +84,7 @@ private:
 	void closeConnect(Connect* conn);
 	void setConnectNormal(Connect* conn);
 	
-	void addToMsgQueue(Connect* conn);
+	void addToMsgQueue(Connect* conn, const ConnectOpt opt);
 	void removeFromMsgQueue(Connect* conn);
 
 private:
@@ -137,6 +145,7 @@ private:
 	
 	SynNotify m_synNotify;            // 连接线程&数据处理线程同步等待&通知
 	int m_activeInterval;             // 连接活跃检测间隔时间，单位秒，超过次间隔时间无数据则关闭连接
+	unsigned short m_checkTimes;      // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	unsigned short m_hbInterval;      // 心跳检测间隔时间，单位秒
 	unsigned char m_hbFailedTimes;    // 心跳检测连续失败hbFailedTimes次后关闭连接
 	char m_status;                    // 连接服务状态，0:停止；1:运行

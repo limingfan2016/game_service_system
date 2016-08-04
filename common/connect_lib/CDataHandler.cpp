@@ -109,7 +109,7 @@ bool CDataHandler::writeToSkt(CConnectManager* connMgr, Connect* conn, const cha
 	int nWrite = ::write(conn->fd, data, len);
 	if (nWrite > 0)
 	{
-		connMgr->setConnectNormal(conn);  // 写数据成功则连接一般情况下都正常
+		// connMgr->setConnectNormal(conn);  // 写数据成功则连接一般情况下都正常（网络、路由等断开数据写入操作检测不出来，只能靠心跳消息检测）
 		wtLen = nWrite;
 	}
 	
@@ -273,7 +273,7 @@ bool CDataHandler::readPkgHeader(Connect* curConn, unsigned int& dataSize)
 			ReleaseErrorLog("read user net pkg header error, id = %lld, fd = %d, pkg len = %d", curConn->id, curConn->fd, pkgHeader->len);
 			return false;
 		}
-
+		
 		curConn->needReadSize = pkgHeader->len - netPkgHeaderLen;  // 用户数据包长度
 		return true;
 	}
@@ -300,7 +300,8 @@ bool CDataHandler::readPkgBody(Connect* curConn, unsigned int dataSize, unsigned
 {
 	if (curConn->needReadSize > 0 && dataSize >= (unsigned int)curConn->needReadSize)
 	{
-		m_connMgr->setConnectNormal(curConn);  // 有数据则填写活跃时间点
+		m_connMgr->addToMsgQueue(curConn, ConnectOpt::EAddToQueue);  // 正常则加入消息队列
+		m_connMgr->setConnectNormal(curConn);                        // 有数据则填写活跃时间点
 		
 		// 直接拷贝数据到缓冲区空间
 		if (pkgData != NULL)
