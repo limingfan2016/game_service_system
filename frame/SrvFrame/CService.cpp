@@ -638,9 +638,8 @@ void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int ms
 	srvStatData.recvSrvMsgSize += msgLen;
 	
     // 异步数据标识
-	const char* srvAsyncDataFlag = NULL; // userData + userDataLen + ntohl(msgHeader->msgLen);
-	unsigned int asyncDataFlagLen = 0; // ntohl(msgHeader->asyncDataFlagLen);
-	// if (asyncDataFlagLen > MaxLocalAsyncDataFlagLen) asyncDataFlagLen = 0;  // 兼容老版本消息处理
+	const char* srvAsyncDataFlag = userData + userDataLen + ntohl(msgHeader->msgLen);
+	const unsigned int asyncDataFlagLen = ntohl(msgHeader->asyncDataFlagLen);
 	
 	// 内部服务消息
 	if (handleModule->onServiceMessage(userData + userDataLen, ntohl(msgHeader->msgLen), userData, userDataLen, 
@@ -742,21 +741,22 @@ unsigned int CService::getServiceId(const char* serviceName)
 
 // 向目标服务发送请求消息
 // handleProtocolId : 应答消息的处理协议ID，如果该消息存在应答的话
-int CService::sendMessage(const char* msgData, const unsigned int msgLen, const char* userData, const unsigned int userDataLen, const char* asyncDataFlag, const unsigned int asyncDataFlagLen,                          unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId, unsigned short srcModuleId, 
+int CService::sendMessage(const char* msgData, const unsigned int msgLen, const char* userData, const unsigned int userDataLen, const char* srvAsyncDataFlag, const unsigned int srvAsyncDataFlagLen,
+                          unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId, unsigned short srcModuleId, 
                           unsigned short handleProtocolId, int userFlag, unsigned int msgId)
 {
-    return sendMessage(m_srvType, m_srvId, msgData, msgLen, userData, userDataLen, asyncDataFlag, asyncDataFlagLen, dstServiceId, dstProtocolId, dstModuleId, srcModuleId,
+    return sendMessage(m_srvType, m_srvId, msgData, msgLen, userData, userDataLen, srvAsyncDataFlag, srvAsyncDataFlagLen, dstServiceId, dstProtocolId, dstModuleId, srcModuleId,
 					   handleProtocolId, userFlag, msgId);
 }
 
 // handleProtocolId : 应答消息的处理协议ID，如果该消息存在应答的话（用于转发消息，替换源消息的服务类型及服务ID，使得目标服务直接回消息给源端而不是中转服务）					  
 int CService::sendMessage(const unsigned short srcServiceType, const unsigned int srcServiceId, const char* msgData, const unsigned int msgLen, const char* userData,
-						  const unsigned int userDataLen, const char* asyncDataFlag, const unsigned int asyncDataFlagLen, unsigned int dstServiceId, unsigned short dstProtocolId,
+						  const unsigned int userDataLen, const char* srvAsyncDataFlag, const unsigned int srvAsyncDataFlagLen, unsigned int dstServiceId, unsigned short dstProtocolId,
 						  unsigned short dstModuleId, unsigned short srcModuleId, unsigned short handleProtocolId, int userFlag, unsigned int msgId)
 {
 	if (msgLen > MaxMsgLength) return LargeMessage;
 	if (userDataLen > MaxUserDataLen) return LargeUserData;
-	if (asyncDataFlagLen > MaxLocalAsyncDataFlagLen) return LargeAsyncDataFlag;
+	if (srvAsyncDataFlagLen > MaxLocalAsyncDataFlagLen) return LargeAsyncDataFlag;
 	
 	// 填写消息头部数据
 	ServiceMsgHeader* msgHeader = (ServiceMsgHeader*)m_sndMsg;
@@ -771,7 +771,7 @@ int CService::sendMessage(const unsigned short srcServiceType, const unsigned in
 	msgHeader->userFlag = htonl(userFlag);
 	msgHeader->msgId = htonl(msgId);
 	msgHeader->userDataLen = htonl(userDataLen);
-	// msgHeader->asyncDataFlagLen = htonl(asyncDataFlagLen);
+	msgHeader->asyncDataFlagLen = htonl(srvAsyncDataFlagLen);
 	msgHeader->msgLen = htonl(msgLen);
 
     // 消息码流数据
@@ -796,19 +796,17 @@ int CService::sendMessage(const unsigned short srcServiceType, const unsigned in
 	{
 		msgHeader->msgLen = 0;
 	}
-	
-	/*
+
 	// 存在无异步数据标识的情况
-	if (asyncDataFlagLen > 0 && asyncDataFlag != NULL)
+	if (srvAsyncDataFlagLen > 0 && srvAsyncDataFlag != NULL)
 	{
-		memcpy(sendMsgData, asyncDataFlag, asyncDataFlagLen);
-		sendMsgData += asyncDataFlagLen;
+		memcpy(sendMsgData, srvAsyncDataFlag, srvAsyncDataFlagLen);
+		sendMsgData += srvAsyncDataFlagLen;
 	}
 	else
 	{
 		msgHeader->asyncDataFlagLen = 0;
 	}
-	*/
 	
 	++srvStatData.sendServiceMsgs;
 	srvStatData.sendSrvMsgSize += (sendMsgData - m_sndMsg);
@@ -919,7 +917,7 @@ int CService::sendMsgToProxy(const char* msgData, const unsigned int msgLen, uns
 	msgHeader->userFlag = htonl(conn->proxyFlag);
 	msgHeader->msgId = htonl(msgId);
 	msgHeader->userDataLen = 0;
-	// msgHeader->asyncDataFlagLen = 0;
+	msgHeader->asyncDataFlagLen = 0;
 	msgHeader->msgLen = htonl(msgLen);
 	
 	// 存在协议无数据的情况

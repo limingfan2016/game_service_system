@@ -80,7 +80,7 @@ namespace NFrame
 		int userFlag;                   // 用户携带的标志数据
 		unsigned int userDataLen;       // 用户数据长度
 		unsigned int msgLen;            // 消息码流长度，不包含消息头长度
-		// unsigned int asyncDataFlagLen;  // 异步数据标识长度
+		unsigned int asyncDataFlagLen;  // 异步数据标识长度
 	};
 	#pragma pack()
 	

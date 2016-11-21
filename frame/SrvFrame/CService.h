@@ -65,13 +65,13 @@ public:
 public:
     // 向目标服务发送请求消息
 	// handleProtocolId : 应答消息的处理协议ID，如果该消息存在应答的话
-    int sendMessage(const char* msgData, const unsigned int msgLen, const char* userData, const unsigned int userDataLen, const char* asyncDataFlag, const unsigned int asyncDataFlagLen,
+    int sendMessage(const char* msgData, const unsigned int msgLen, const char* userData, const unsigned int userDataLen, const char* srvAsyncDataFlag, const unsigned int srvAsyncDataFlagLen,
 	                unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId = 0, unsigned short srcModuleId = 0,
 					unsigned short handleProtocolId = 0, int userFlag = 0, unsigned int msgId = 0);
 					
 	// handleProtocolId : 应答消息的处理协议ID，如果该消息存在应答的话（用于转发消息，替换源消息的服务类型及服务ID，使得目标服务直接回消息给源端而不是中转服务）
     int sendMessage(const unsigned short srcServiceType, const unsigned int srcServiceId, const char* msgData, const unsigned int msgLen, const char* userData, const unsigned int userDataLen,
-					const char* asyncDataFlag, const unsigned int asyncDataFlagLen, unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId = 0,
+					const char* srvAsyncDataFlag, const unsigned int srvAsyncDataFlagLen, unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId = 0,
 					unsigned short srcModuleId = 0, unsigned short handleProtocolId = 0, int userFlag = 0, unsigned int msgId = 0);
 					
 	// 向目标网络客户端发送消息
