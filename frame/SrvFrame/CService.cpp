@@ -197,6 +197,7 @@ static void UpdateConfig(void* cb)
 bool CTimerCallBack::OnTimer(unsigned int timerId, void* pParam, unsigned int remainCount)
 {
 	((TimerMessage*)pParam)->count = remainCount;
+
 	if (!pTimerMsgQueue->put(pParam))
 	{
 		++srvStatData.onTimerFaileds;
@@ -494,6 +495,8 @@ void CService::notifyUpdateConfig()
 // 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
 unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerHandler cbFunc, int userId, void* param, unsigned int count)
 {
+	if (count == 0) return 0;  // 表示setTimer失败
+	
 	++srvStatData.setTimerMsgs;
 	
 	if (m_timerMsgMaxCount == 0 || m_timerIdToMsg.size() < m_timerMsgMaxCount)
@@ -505,9 +508,15 @@ unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerH
 		timerMsg->userId = userId;
 		timerMsg->param = param;
 		timerMsg->deleteRef = 0;  // 标志未被删除
-		timerMsg->timerId = m_timer.setTimer(interval, &m_timerMsgCb, timerMsg, count);
-		m_timerIdToMsg[timerMsg->timerId] = timerMsg;
 		
+		timerMsg->timerId = m_timer.setTimer(interval, &m_timerMsgCb, timerMsg, count);
+		if (timerMsg->timerId == 0)
+		{
+		    m_memForTimerMsg.put((char*)timerMsg);
+			return 0;  // 表示setTimer失败
+		}
+
+		m_timerIdToMsg[timerMsg->timerId] = timerMsg;
 		return timerMsg->timerId;
 	}
 	else
@@ -527,6 +536,10 @@ void CService::killTimer(unsigned int timerId)
 	TimerIdToMsg::iterator it = m_timerIdToMsg.find(timerId);     // 查找看是否存在，还没有被触发
     if (it != m_timerIdToMsg.end())
 	{
+		// 存在一种极端情况，底层触发OnTimer之后，这里执行m_timer.killTimer(timerId)会导致timerId永久存储在底层的killTimer map里，造成内存泄漏
+		// 更极端的是，timer id值unsigned int被++循环一遍之后，新设置的timer id值和这里的timerId相同，则新设置的timer会被误当做被killTimer的id处理因此不会被触发，导致错误
+		// 解决方案一：底层timer生成的id唯一且随机，或者timer id改为unsigned long long超大类型，此方案只能降低出错概率；
+		// 解决方案二：底层setTimer时检查新生成的id是否在killTimer map里，如果存在则从map里删除
 		m_timer.killTimer(timerId);                               // 1）先执行kill操作
 		void* timerMsg = it->second;
 		m_timerIdToMsg.erase(it);
@@ -709,11 +722,23 @@ bool CService::handleTimerMessage()
 	{
 		++srvStatData.onTimerMsgs;
 		
+		// 存在业务上层可能在onTimeOut回调里执行killTimer，setTimer的情况，则onTimeOut调用完毕之后timerMsg已经被重新分配给新的定时器
+		// 因此这里必须提前保存timerId值&剩余触发次数做为判断使用
+		const unsigned int timerId = timerMsg->timerId;
+		const unsigned int count = timerMsg->count;
+		
 		timerMsg->handler->onTimeOut(timerMsg->cbFunc, timerMsg->timerId, timerMsg->userId, timerMsg->param, timerMsg->count);
-		if (timerMsg->count == 0)
+		
+		// 存在业务上层可能在onTimeOut回调里执行killTimer，setTimer的情况，再加上TimerMessage是内存块管理，因此必须在调用完onTimeOut之后才能释放内存块，否则会导致内存块被错误释放
+		if (count == 0)
 		{
-		    m_timerIdToMsg.erase(timerMsg->timerId);
-			m_memForTimerMsg.put((char*)timerMsg);
+			// 存在业务上层可能在onTimeOut回调里执行killTimer，setTimer的情况，因此这里必须重新判断，防止timerMsg被多次释放导致的错误
+			TimerIdToMsg::iterator timerIt = m_timerIdToMsg.find(timerId);
+			if (timerIt != m_timerIdToMsg.end())
+			{
+				m_timerIdToMsg.erase(timerIt);
+				m_memForTimerMsg.put((char*)timerMsg);
+			}
 		}
 	}
 	else if (--timerMsg->deleteRef == 0)        // 该消息已经被用户执行kill操作干掉了

@@ -18,13 +18,15 @@
 
 namespace NCommon
 {
+	const unsigned int TimerMemBlockCount = 1024;  // 定时器内存块数量
+	
 	CTimer::CTimer()
 	{
 		m_isRun = false;
 		m_curTimerId = 0;
-		NEW(m_pMemManager, CMemManager(1024, 1024, sizeof(STimerInfo)));
+		NEW(m_pMemManager, CMemManager(TimerMemBlockCount, TimerMemBlockCount, sizeof(STimerInfo)));
 		NEW(m_pMutex, CMutex(MutexType::recursiveMutexType));
-		m_vTimer.reserve(1024);
+		m_vTimer.reserve(TimerMemBlockCount);
 	}
 
 	CTimer::~CTimer()
@@ -49,9 +51,22 @@ namespace NCommon
 	//设置定时器，时间单位ms，最小粒度100ms，返回值 timerId 非0
 	unsigned int CTimer::setTimer(unsigned int timeGap, CTimerI* pTimerI, void *pParam, unsigned int runCounts)
 	{
+		if (runCounts == 0) return 0;  // 无效参数，return 0;表示setTimer失败
+		
 		CLock lock(*m_pMutex);
-		STimerInfo *pTimerInfo = (STimerInfo*)m_pMemManager->get();
+		
+		// 存在一种极端情况，触发OnTimer之后，上层再调用killTimer(timerId)会导致已经触发了的timerId永久存储在底层的m_umapKillTimer map里，造成内存泄漏
+		// 更极端的是，timer id值unsigned int被++循环一遍之后，新设置的timer id值m_curTimerId和被删除的timerId值相同，则新设置的timer会被误当做被killTimer的id处理因此不会被触发，导致错误
+		// 解决方案一：timer生成的id唯一且随机，或者timer id改为unsigned long long超大类型，此方案只能降低出错概率；
+		// 解决方案二：setTimer时检查新生成的id是否在killTimer m_umapKillTimer map里，如果存在则从map里删除
 		if (++m_curTimerId == 0) m_curTimerId = 1;
+		
+		// 出现上述错误的情况概率极低，先屏蔽解决方案
+		// unsigned int 最大值42亿，假设每秒一次setTimer调用也需要133年才一个轮回
+		// std::unordered_map<unsigned int, bool>::iterator killTimerIt = m_umapKillTimer.find(m_curTimerId);
+		// if (killTimerIt != m_umapKillTimer.end()) m_umapKillTimer.erase(killTimerIt);
+		
+		STimerInfo *pTimerInfo = (STimerInfo*)m_pMemManager->get();
 		pTimerInfo->timerId = m_curTimerId;
 		pTimerInfo->pTimerI = pTimerI;
 		pTimerInfo->runCounts = runCounts;
@@ -120,10 +135,11 @@ namespace NCommon
 					eraseTimer(curIndex);
 
 					//判断是否已被killtimer
-					if (m_umapKillTimer.find(pTimerInfo->timerId) != m_umapKillTimer.end())
+					std::unordered_map<unsigned int, bool>::iterator killTimerIt = m_umapKillTimer.find(pTimerInfo->timerId);
+					if (killTimerIt != m_umapKillTimer.end())
 					{
 						//释放
-						m_umapKillTimer.erase(pTimerInfo->timerId);
+						m_umapKillTimer.erase(killTimerIt);
 						m_pMemManager->put((char*)pTimerInfo);
 						continue;
 					}
@@ -145,13 +161,17 @@ namespace NCommon
 						pTimerInfo->runCounts--;
 
 						pTimerInfo->pTimerI->OnTimer(pTimerInfo->timerId, pTimerInfo->pParam, pTimerInfo->runCounts);
+						
+						// 存在应用上层有可能在 OnTimer 回调里调用killtimer pTimerInfo->timerId的情况，则此处必须从m_umapKillTimer中删除，否则会导致内存泄漏
+						killTimerIt = m_umapKillTimer.find(pTimerInfo->timerId);
+						if (killTimerIt != m_umapKillTimer.end()) m_umapKillTimer.erase(killTimerIt);
+						
 						m_pMemManager->put((char*)pTimerInfo);
 					}
 					else //直接释放,理论上不会走到这
 					{
 						m_pMemManager->put((char*)pTimerInfo);
 					}
-
 				}
 				else
 				{
