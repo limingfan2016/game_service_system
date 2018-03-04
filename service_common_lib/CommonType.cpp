@@ -1,7 +1,7 @@
 
-/* author : liuxu
+/* author : limingfan
  * date : 2015.03.20
- * description : 各服务公用的数据类型定义
+ * description : 各服务公用的数据类型定义及API
  */
 
 #include <stdlib.h>
@@ -22,12 +22,10 @@
 #include <openssl/pem.h>
 #include <openssl/des.h>
 
-
 #include "CommonType.h"
 #include "base/Function.h"
 #include "base/CCfg.h"
-#include "base/CLogger.h"
-#include "../../frame/SrvFrame/IService.h"
+#include "SrvFrame/IService.h"
 
 
 namespace NProject
@@ -41,27 +39,14 @@ enum EHttpServiceType
 	MaxCount,
 };
 
-
-void getSessionKey(const SessionKeyData& skd, char sessionKey[MaxKeyLen])
-{
-	NCommon::b2str((const char *)&skd, 10, sessionKey, MaxKeyLen); //将key的前10字节 转为16进制字串
-}
-
 static uint32_t http_service_id[EHttpServiceType::MaxCount];
-static uint32_t service_id_arr[NFrame::ServiceType::MaxServiceType][MaxServiceCount];
-static uint32_t service_id_index_arr[NFrame::ServiceType::MaxServiceType];
-static bool isInitServiceIdList = false;
+
+typedef unordered_map<uint32_t, UIntVector> ServiceTypeToIdMap;    // 服务类型到服务ID信息
+static ServiceTypeToIdMap service_id_info;
+
+
 bool initServiceIDList(NCommon::CCfg *pcfg)
 {
-	for (int i = 0; i < NFrame::ServiceType::MaxServiceType; i++)
-	{
-		service_id_index_arr[i] = 0;
-		for (int j = 0; j < MaxServiceCount; j++)
-		{
-			service_id_arr[i][j] = 0;
-		}
-	}
-	
 	const NCommon::Key2Value *pKey2Value = pcfg->getList("ServiceID");
 	while (pKey2Value)
 	{
@@ -71,9 +56,8 @@ bool initServiceIDList(NCommon::CCfg *pcfg)
 			continue;
 		}
 
-		int service_id = atoi(pKey2Value->value);
-		int service_type = service_id / 1000;
-		service_id_arr[service_type][service_id_index_arr[service_type]++] = service_id;
+		const unsigned int service_id = atoi(pKey2Value->value);
+		service_id_info[service_id / ServiceIdBaseValue].push_back(service_id);
 
 		pKey2Value = pKey2Value->pNext;
 	}
@@ -85,10 +69,7 @@ bool initServiceIDList(NCommon::CCfg *pcfg)
 	{
 		// 初始化公用的http服务ID
 		http_service_id[EHttpServiceType::Common] = atoi(http_id);
-		for (int idx = 0; idx < MaxServiceCount; idx++)
-		{
-			service_id_arr[NFrame::ServiceType::HttpSrv][idx] = http_service_id[EHttpServiceType::Common];
-		}
+        service_id_info[ServiceType::HttpOperationSrv].push_back(http_service_id[EHttpServiceType::Common]);
 	}
 	
 	// 腾讯充值操作专用的http服务ID
@@ -98,96 +79,100 @@ bool initServiceIDList(NCommon::CCfg *pcfg)
 		http_service_id[EHttpServiceType::TX] = atoi(http_id);
 	}
 
-	isInitServiceIdList = true;
 	return true;
+}
+
+unsigned int getDestServiceID(uint32_t dest_service_type, const char *str, const int str_len)
+{
+    const UIntVector& srvIds = service_id_info[dest_service_type];
+	return !srvIds.empty() ? srvIds[NCommon::strToHashValue(str, str_len) % srvIds.size()] : 0;
+}
+
+unsigned int getDestServiceID(uint32_t dest_service_type, const unsigned int index)
+{
+    const UIntVector& srvIds = service_id_info[dest_service_type];
+	return !srvIds.empty() ? srvIds[index % srvIds.size()] : 0;
 }
 
 bool getDestServiceID(uint32_t dest_service_type, const char *str, const int str_len, uint32_t &service_id)
 {
-	if (!isInitServiceIdList || service_id_index_arr[dest_service_type] == 0)
-	{
-		return false;
-	}
-
-	service_id = service_id_arr[dest_service_type][NCommon::strToHashValue(str, str_len) % service_id_index_arr[dest_service_type]];
-	
-	return true;
+	service_id = getDestServiceID(dest_service_type, str, str_len);
+	return service_id > 0;
 }
 
 bool getDestServiceID(uint32_t dest_service_type, const unsigned int index, uint32_t &service_id)
 {
-	if (!isInitServiceIdList || service_id_index_arr[dest_service_type] == 0)
-	{
-		return false;
-	}
-
-	service_id = service_id_arr[dest_service_type][index % service_id_index_arr[dest_service_type]];
-	
-	return true;
+	service_id = getDestServiceID(dest_service_type, index);
+	return service_id > 0;
 }
 
 unsigned int getHttpServiceId(const unsigned int type)
 {
-	return (type == ThirdPlatformType::TXQQ || type == ThirdPlatformType::TXWX) ? http_service_id[EHttpServiceType::TX] : http_service_id[EHttpServiceType::Common];
+	return 0;
 }
 
-int getRandNumber(const int min, const int max)
+void getSessionKey(const SessionKeyData& skd, char sessionKey[IdMaxLen])
 {
-	const int maxPercent = max - min + 1;
-	if (maxPercent == 0) return -1;
-
-	static bool IsInitRandSeed = false;
-	if (!IsInitRandSeed)
-	{
-		IsInitRandSeed = true;
-		
-		struct timeval curTV;
-		gettimeofday(&curTV, NULL);
-		srand(curTV.tv_usec);
-	}
-
-	return (rand() % maxPercent) + min;
+	NCommon::b2str((const char *)&skd, 10, sessionKey, IdMaxLen);  // 将key的前10字节 转为16进制字串
 }
 
-unsigned int getPositiveRandNumber(unsigned int min, unsigned int max)
+
+int getCurrentYearDay()
 {
-	if (min > max)
+	const time_t curSecs = time(NULL);
+	struct tm curTime;
+	localtime_r(&curSecs, &curTime);
+	return curTime.tm_yday;
+}
+
+// 获取当前日期
+const char* getCurrentDate(char* date, unsigned int len, const char* format)
+{
+	const time_t curSecs = time(NULL);
+	struct tm curTime;
+	localtime_r(&curSecs, &curTime);
+	snprintf(date, len - 1, format, (curTime.tm_year + 1900), (curTime.tm_mon + 1), curTime.tm_mday);
+	return date;
+}
+
+// 解析后返回物品类型
+unsigned int parseGameGoodsType(const unsigned int type)
+{
+	if (type < EGameGoodsType::EMaxGameGoodsType) return type;
+	
+	return 0;
+}
+
+
+// 道具物品类型&名称
+class CGoodsInfo
+{
+	typedef std::unordered_map<unsigned int, std::string> GoodsTypeToName;
+public:
+	CGoodsInfo()
 	{
-		unsigned int tmp = min;
-		min = max;
-		max = tmp;
+		// m_type2name[EGameGoodsType::EGoodsRMB] = "RMB";
+	    // m_type2name[EGameGoodsType::EGoodsGold] = "金币";
+		// m_type2name[EGameGoodsType::EGoodsRoomCard] = "房卡";
 	}
 	
-	const unsigned int maxPercent = max - min + 1;
-	if (maxPercent == 0) return -1;
-
-	static bool IsInitRandSeed = false;
-	if (!IsInitRandSeed)
+	const char* getName(const unsigned int type)
 	{
-		IsInitRandSeed = true;
-		
-		struct timeval curTV;
-		gettimeofday(&curTV, NULL);
-		srand(curTV.tv_usec);
-	}
-
-	return (rand() % maxPercent) + min;
-}
-
-// 获取随机字符串，生成 len - 1 个随机字符，以\0结束
-const char* getRandChars(char* buff, const unsigned int len)
-{
-	if (buff != NULL && len > 0)
-	{
-		for (unsigned int i = 0; i < len - 1; ++i)
-		{
-			buff[i] = getRandNumber('a', 'z');
-		}
-		buff[len - 1] = '\0';
+		GoodsTypeToName::const_iterator it = m_type2name.find(type);
+		return (it != m_type2name.end()) ? it->second.c_str() : NULL;
 	}
 	
-	return buff;
+private:
+	GoodsTypeToName m_type2name;
+};
+
+// 根据物品类型获取物品中文名称
+const char* getGameGoodsChineseName(const unsigned int type)
+{
+	static CGoodsInfo goodsInfo;
+	return goodsInfo.getName(parseGameGoodsType(type));
 }
+
 
 // MD5加密
 void md5Encrypt(const char* data, unsigned int len, char* md5Buff, bool lowercase)
@@ -445,25 +430,29 @@ string dESEcb3Encrypt(const string &ciphertext, const string &key)
 	memset(ke2, 0, 8);
 	memset(ke2, 0, 8);
 
-	if (key.length() >= 24) {
-	 memcpy(ke1, key.c_str(), 8);
-	 memcpy(ke2, key.c_str() + 8, 8);
-	 memcpy(ke3, key.c_str() + 16, 8);
+	if (key.length() >= 24)
+	{
+	    memcpy(ke1, key.c_str(), 8);
+	    memcpy(ke2, key.c_str() + 8, 8);
+	    memcpy(ke3, key.c_str() + 16, 8);
 	}
-	else if (key.length() >= 16) {
-	 memcpy(ke1, key.c_str(), 8);
-	 memcpy(ke2, key.c_str() + 8, 8);
-	 memcpy(ke3, key.c_str() + 16, key.length() - 16);
+	else if (key.length() >= 16)
+	{
+		memcpy(ke1, key.c_str(), 8);
+		memcpy(ke2, key.c_str() + 8, 8);
+		memcpy(ke3, key.c_str() + 16, key.length() - 16);
 	}
-	else if (key.length() >= 8) {
-	 memcpy(ke1, key.c_str(), 8);
-	 memcpy(ke2, key.c_str() + 8, key.length() - 8);
-	 memcpy(ke3, key.c_str(), 8);
+	else if (key.length() >= 8)
+	{
+		memcpy(ke1, key.c_str(), 8);
+		memcpy(ke2, key.c_str() + 8, key.length() - 8);
+		memcpy(ke3, key.c_str(), 8);
 	}
-	else {
-	 memcpy(ke1, key.c_str(), key.length());
-	 memcpy(ke2, key.c_str(), key.length());
-	 memcpy(ke3, key.c_str(), key.length());
+	else
+	{
+		memcpy(ke1, key.c_str(), key.length());
+		memcpy(ke2, key.c_str(), key.length());
+		memcpy(ke3, key.c_str(), key.length());
 	}
 
 	DES_key_schedule ks1, ks2, ks3;
@@ -476,28 +465,27 @@ string dESEcb3Encrypt(const string &ciphertext, const string &key)
 	vector<unsigned char> vecCleartext;
 	unsigned char tmp[8];
 
-	for (int i = 0; i < (int)ciphertext.length() / 8; i++) {
-	 memcpy(inputText, ciphertext.c_str() + i * 8, 8);
-	 DES_ecb3_encrypt(&inputText, &outputText, &ks1, &ks2, &ks3, DES_DECRYPT);
-	 memcpy(tmp, outputText, 8);
+	for (int i = 0; i < (int)ciphertext.length() / 8; i++)
+	{
+		memcpy(inputText, ciphertext.c_str() + i * 8, 8);
+		DES_ecb3_encrypt(&inputText, &outputText, &ks1, &ks2, &ks3, DES_DECRYPT);
+		memcpy(tmp, outputText, 8);
 
-	 for (int j = 0; j < 8; j++)
-	  vecCleartext.push_back(tmp[j]);
+		for (int j = 0; j < 8; j++) vecCleartext.push_back(tmp[j]);
 	}
 
-	if (ciphertext.length() % 8 != 0) {
-	 int tmp1 = ciphertext.length() / 8 * 8;
-	 int tmp2 = ciphertext.length() - tmp1;
-	 memset(inputText, 0, 8);
-	 memcpy(inputText, ciphertext.c_str() + tmp1, tmp2);
+	if (ciphertext.length() % 8 != 0)
+	{
+		int tmp1 = ciphertext.length() / 8 * 8;
+		int tmp2 = ciphertext.length() - tmp1;
+		memset(inputText, 0, 8);
+		memcpy(inputText, ciphertext.c_str() + tmp1, tmp2);
 
-	 DES_ecb3_encrypt(&inputText, &outputText, &ks1, &ks2, &ks3, DES_DECRYPT);
-	 memcpy(tmp, outputText, 8);
+		DES_ecb3_encrypt(&inputText, &outputText, &ks1, &ks2, &ks3, DES_DECRYPT);
+		memcpy(tmp, outputText, 8);
 
-	 for (int j = 0; j < 8; j++)
-	  vecCleartext.push_back(tmp[j]);
+		for (int j = 0; j < 8; j++) vecCleartext.push_back(tmp[j]);
 	}
-
 
 	strClearText.clear();
 	strClearText.assign(vecCleartext.begin(), vecCleartext.end());
@@ -505,167 +493,6 @@ string dESEcb3Encrypt(const string &ciphertext, const string &key)
 	return strClearText;
 }
 
-// 获取捕鱼游戏相关等级需要的经验
-unsigned int getBuyuLevelExp(unsigned int lv)
-{
-	const unsigned int kValue = 20;
-	++lv;
-	unsigned int cur_level_need_exp = floor(((lv - 1)*(lv - 1)*(lv - 1) + kValue) / 2 * ((lv - 1) * 2 + kValue) + kValue);
-	return cur_level_need_exp;
-}
-
-int getCurrentYearDay()
-{
-	const time_t curSecs = time(NULL);
-	struct tm curTime;
-	localtime_r(&curSecs, &curTime);
-	return curTime.tm_yday;
-}
-
-// 获取当前日期
-const char* getCurrentDate(char* date, unsigned int len, const char* format)
-{
-	const time_t curSecs = time(NULL);
-	struct tm curTime;
-	localtime_r(&curSecs, &curTime);
-	snprintf(date, len - 1, format, (curTime.tm_year + 1900), (curTime.tm_mon + 1), curTime.tm_mday);
-	return date;
-}
-
-// 是否是PK场金币门票
-bool checkPKGoldTicket(const unsigned int value, unsigned int& id, unsigned int& prefix, bool& isFullDay,
-                       unsigned int& day, unsigned int& beginHour, unsigned int& beginMin, unsigned int& endHour, unsigned int& endMin)
-{
-	/*
-	<pk_gold_id_rule desc="PK场金币对战门票ID配置规则说明">
-        <type id="2350232098" desc="总共10位数，第一、二位表示起始的小时，第三、四位表示起始的分钟，第五、六位表示结束的小时，第七、八位表示结束的分钟，第九、十位表示相隔的天数，不足两位的前面必须补0"/>
-		<type id="1000000000" desc="1000000000表示该门票全天当天有效"/>
-    </pk_gold_id_rule>
-	
-	<pk_gold_type id="901" name="PK场金币对战门票ID类型"/>
-	<ticket id="90100001" desc="自动生成的金币门票ID规则说明，901是金币门票ID的前缀，接着00001开始是门票ID的索引"/>
-	*/
-
-	const unsigned int fullDay = 10000000;                // 全天有效的门票配置规则
-	const unsigned int minTimeType = 100000000;           // 配置规则时间最小值
-	const unsigned int maxTimeType = 2361000000;          // 配置规则时间最大值
-	const unsigned int minGoldTicketId = 90100000;        // 自动生成的金币门票ID最小值
-	const unsigned int maxGoldTicketId = 90199999;        // 自动生成的金币门票ID最大值
-	
-	// 金币门票类型
-	if (EPropType::EPKDayGoldTicket == value || EPropType::EPKHourGoldTicket == value)
-	{
-		id = value;
-		return true;
-	}
-	
-	// 配置的规则时间
-	else if (value >= minTimeType && value < maxTimeType)
-	{
-		id = 0;
-		prefix = 0;
-		isFullDay = (fullDay == (value / 100));
-		
-		day = value % 100;                                // 相隔的天数
-		if (day < 1) return false;                        // 至少相隔1天才可以
-		
-		beginHour = value / 100000000;                    // 开始时间小时点
-		beginMin = value % 100000000 / 1000000;           // 开始时间分钟点
-		endHour = value % 1000000 / 10000;                // 结束时间小时点
-		endMin = value % 10000 / 100;                     // 结束时间分钟点
-		
-		if (isFullDay || endHour > beginHour || (endHour == beginHour && endMin > beginMin)) return true;
-	}
-	
-	// 自动生成的金币门票ID
-	else if (value >= minGoldTicketId && value <= maxGoldTicketId)
-	{
-		id = value;
-		prefix = value / 100000;                          // 获取金币门票前缀
-		
-		if (EPropType::EPKDayGoldTicket == prefix || EPropType::EPKHourGoldTicket == prefix) return true;
-	}
-	
-	return false;
-}
-
-// 解析后返回物品类型
-unsigned int parseGameGoodsType(const unsigned int type)
-{
-	if (type < EPropType::AllGoodsTypeMax) return type;
-	
-	/*
-	<pk_gold_id_rule desc="PK场金币对战门票ID配置规则说明">
-        <type id="2350232098" desc="总共10位数，第一、二位表示起始的小时，第三、四位表示起始的分钟，第五、六位表示结束的小时，第七、八位表示结束的分钟，第九、十位表示相隔的天数，不足两位的前面必须补0"/>
-		<type id="1000000000" desc="1000000000表示该门票全天当天有效"/>
-    </pk_gold_id_rule>
-	
-	<pk_gold_type id="901" name="PK场金币对战门票ID类型"/>
-	<ticket id="90100001" desc="自动生成的金币门票ID规则说明，901是金币门票ID的前缀，接着00001开始是门票ID的索引"/>
-	*/
-
-	const unsigned int fullDay = 10000000;                // 全天有效的门票配置规则
-	const unsigned int minTimeType = 100000000;           // 配置规则时间最小值
-	const unsigned int maxTimeType = 2361000000;          // 配置规则时间最大值
-	const unsigned int minGoldTicketId = 90100000;        // 自动生成的金币门票ID最小值
-	const unsigned int maxGoldTicketId = 90199999;        // 自动生成的金币门票ID最大值
-
-	// 配置的规则时间
-	if (type >= minTimeType && type < maxTimeType) return (fullDay == (type / 100)) ? EPropType::EPKDayGoldTicket : EPropType::EPKHourGoldTicket;
-	
-	// 自动生成的金币门票ID
-	if (type >= minGoldTicketId && type <= maxGoldTicketId)
-	{
-		const unsigned int prefix = type / 100000;                          // 获取金币门票前缀
-		if (EPropType::EPKDayGoldTicket == prefix || EPropType::EPKHourGoldTicket == prefix) return prefix;
-	}
-	
-	return type;
-}
-
-
-// 道具物品类型&名称
-class CGoodsInfo
-{
-	typedef std::unordered_map<unsigned int, std::string> GoodsTypeToName;
-public:
-	CGoodsInfo()
-	{
-		m_type2name[EPropType::PropGold] = "金币";
-	    m_type2name[EPropType::PropFishCoin] = "渔币";
-		m_type2name[EPropType::PropSuona] = "小喇叭";
-		m_type2name[EPropType::PropLightCannon] = "激光炮";
-		m_type2name[EPropType::PropFlower] = "鲜花";
-		m_type2name[EPropType::PropMuteBullet] = "哑弹";
-		m_type2name[EPropType::PropSlipper] = "拖鞋";
-		m_type2name[EPropType::PropVoucher] = "奖券";
-		m_type2name[EPropType::PropAutoBullet] = "自动炮";
-		m_type2name[EPropType::PropLockBullet] = "锁定炮";
-		m_type2name[EPropType::PropDiamonds] = "钻石";
-		m_type2name[EPropType::PropPhoneFareValue] = "话费";
-		m_type2name[EPropType::PropScores] = "积分";
-		m_type2name[EPropType::PropRampage] = "狂暴";
-		m_type2name[EPropType::PropDudShield] = "护盾";
-		m_type2name[EPropType::EPKDayGoldTicket] = "PK场全天金币对战门票";
-		m_type2name[EPropType::EPKHourGoldTicket] = "PK场限时金币对战门票";
-	}
-	
-	const char* getName(const unsigned int type)
-	{
-		GoodsTypeToName::const_iterator it = m_type2name.find(type);
-		return (it != m_type2name.end()) ? it->second.c_str() : NULL;
-	}
-	
-private:
-	GoodsTypeToName m_type2name;
-};
-
-// 根据物品类型获取物品中文名称
-const char* getGameGoodsChineseName(const unsigned int type)
-{
-	static CGoodsInfo goodsInfo;
-	return goodsInfo.getName(parseGameGoodsType(type));
-}
 
 }
 

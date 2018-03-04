@@ -4,9 +4,9 @@
  * description : 客户端软件版本更新管理
  */
 
+#include "CommonDataDefine.h"
 #include "CClientVersionManager.h"
-#include "service_common_module.pb.h"
-#include "SrvFrame/UserType.h"
+#include "protocol/appsrv_common_module.pb.h"
 #include "base/ErrorCode.h"
 
 
@@ -44,27 +44,30 @@ void CClientVersionManager::checkVersion(const char* data, const unsigned int le
 	com_protocol::ClientCheckVersionReq checkVersionReq;
 	if (!checkVersionReq.ParseFromArray(data, len))
 	{
-		ReleaseErrorLog("in checkVersion ParseFromArray message error, msg byte len = %d, buff len = %d", checkVersionReq.ByteSize(), len);
+		OptErrorLog("check version ParseFromArray message error, msg byte len = %d, buff len = %d", checkVersionReq.ByteSize(), len);
+		
 		return;
 	}
 	
 	com_protocol::ClientCheckVersionRsp checkVersionRsq;
 	std::string* newVersion = checkVersionRsq.mutable_new_version();
 	std::string* newFileURL = checkVersionRsq.mutable_new_file_url();
+	
 	unsigned int flag = 0;
-	int rc = getVersionInfo(checkVersionReq.device_type(), checkVersionReq.platform_type(), checkVersionReq.cur_version(), flag, *newVersion, *newFileURL);
+	int rc = getVersionInfo(checkVersionReq.os_type(), checkVersionReq.platform_type(), checkVersionReq.cur_version(), flag, *newVersion, *newFileURL);
 	if (rc != Success)
 	{
-		ReleaseErrorLog("in checkVersion get version info error, device type = %d, platform type = %d, current version = %s, rc = %d",
-		checkVersionReq.device_type(), checkVersionReq.platform_type(), checkVersionReq.cur_version().c_str(), rc);
+		OptErrorLog("check version get info error, device type = %d, platform type = %d, current version = %s, rc = %d",
+		checkVersionReq.os_type(), checkVersionReq.platform_type(), checkVersionReq.cur_version().c_str(), rc);
+		
 		return;
 	}
-	checkVersionRsq.set_flag(flag);
+	checkVersionRsq.set_result((com_protocol::ECheckVersionResult)flag);
 	
 	char msgBuffer[MaxMsgLen] = {0};
 	if (!checkVersionRsq.SerializeToArray(msgBuffer, MaxMsgLen))
 	{
-		ReleaseErrorLog("in checkVersion SerializeToArray message error, msg byte len = %d, buff len = %d", checkVersionRsq.ByteSize(), MaxMsgLen);
+		OptErrorLog("check version SerializeToArray message error, msg byte len = %d, buff len = %d", checkVersionRsq.ByteSize(), MaxMsgLen);
 		return;
 	}
 	

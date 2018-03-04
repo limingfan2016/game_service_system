@@ -24,12 +24,12 @@ class CClientVersionManager : public NFrame::CHandler
 public:
 	CClientVersionManager();
 	~CClientVersionManager();
-	
+
 public:
 	int init(NFrame::CLogicHandler* msgHander, unsigned short reqProtocol, unsigned short rspProtocol);
 
 private:
-	virtual int getVersionInfo(const unsigned int deviceType, const unsigned int platformType, const string& curVersion, unsigned int& flag, string& newVersion, string& newFileURL) = 0;
+	virtual int getVersionInfo(const unsigned int osType, const unsigned int platformType, const string& curVersion, unsigned int& flag, string& newVersion, string& newFileURL) = 0;
 	
 private:
 	void checkVersion(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
@@ -42,7 +42,6 @@ protected:
 	
 DISABLE_COPY_ASSIGN(CClientVersionManager);
 };
-
 
 }
 

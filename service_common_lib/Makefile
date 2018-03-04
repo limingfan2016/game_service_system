@@ -1,7 +1,10 @@
 CFLAGS = -static -I/usr/local/include -I../../../../import/third_party/include -I../../../common -I../../../app/frame -g -Wall -o2 -std=c++0x
 CC=g++
-SRC=$(wildcard *.cc)
-SRC+=$(wildcard *.cpp)
+
+PROTOCOL = protocol/*.cc
+SRC=$(wildcard *.cpp)
+SRC+= $(wildcard $(PROTOCOL))
+
 OBJ=$(addprefix ./, $(addsuffix .o, $(basename $(SRC))))
 TARGET=../../../../lib/libprojcommon.a
 
