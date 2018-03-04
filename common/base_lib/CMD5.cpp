@@ -12,6 +12,10 @@
 namespace NCommon
 {
 
+#define uint8 unsigned char
+#define uint32 unsigned int
+
+
 #define GET_UINT32(n,b,i)\
 {\
 (n) = (uint32) ((uint8 *) b)[(i)]\

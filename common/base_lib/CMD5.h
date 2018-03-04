@@ -16,24 +16,21 @@ using namespace std;
 class CMD5
 {
 public:
-#define uint8 unsigned char
-#define uint32 unsigned int
-
     struct md5_context
     {
-        uint32 total[2];
-        uint32 state[4];
-        uint8 buffer[64];
+        unsigned int total[2];
+        unsigned int state[4];
+        unsigned char buffer[64];
     };
 
     void md5_starts( struct md5_context *ctx );
-	void md5_process(struct md5_context *ctx, const uint8 data[64]);
-	void md5_update(struct md5_context *ctx, const uint8 *input, uint32 length);
-    void md5_finish( struct md5_context *ctx, uint8 digest[16] );
+	void md5_process(struct md5_context *ctx, const unsigned char data[64]);
+	void md5_update(struct md5_context *ctx, const unsigned char *input, unsigned int length);
+    void md5_finish( struct md5_context *ctx, unsigned char digest[16] );
 
 public:
     //! construct a CMD5 from any buffer
-	void GenerateMD5(const unsigned char* buffer, uint32 bufferlen);
+	void GenerateMD5(const unsigned char* buffer, unsigned int bufferlen);
 
     //! construct a CMD5
     CMD5();

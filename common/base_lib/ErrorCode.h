@@ -11,27 +11,32 @@
 namespace NErrorCode
 {
 
-// redis 错误码范围[-3 -- -20]
+// redis 错误码范围[-101 -- -200]
+// 注意：封装的 redis api 把错误码作为数据长度返回了，因此错误码只能定义为负数表示错误
 enum ERedis
 {
-	NormalError = -3,		//redis常规错误，说明用的不对
-	NetError = -4,			//网络连接错误
-	SpaceNotEnough = -5,	//存储空间不够
+	NormalError = -101,		          // redis常规错误，说明用的不对
+	NetError = -102,			      // 网络连接错误
+	SpaceNotEnough = -103,	          // 存储空间不够
 };
 
+
 // 公共模块 错误码范围[0---100]
-enum ECommon {
-	Success = 0,          // 调用成功
-	InvalidParam = 1,     // 无效参数
-	NoMemory = 2,         // new 失败，没内存了
+enum ECommon
+{
+	Success = 0,                      // 调用成功
 	
-	QueueFull = 3,        // 消息队列满了
-	SystemCallErr = 4,    // 系统调用失败
+	InvalidParam = 1,                 // 无效参数
+	NoMemory = 2,                     // new 失败，没内存了
+	
+	QueueFull = 3,                    // 消息队列满了
+	SystemCallErr = 4,                // 系统调用失败
 };
 
 
 // 共享内存模块 错误码范围[101---120]
-enum EShm {
+enum EShm
+{
 	OpenKeyFileFailed = 101,          // 打开共享内存key文件失败
 	LockKeyFileFailed = 102,          // 锁定共享内存key文件失败
 	CreateKeyFileFailed = 103,        // 创建共享内存key文件失败
@@ -51,7 +56,8 @@ enum EShm {
 
 
 // 网络连接模块 错误码范围[121---150]
-enum EConnect {
+enum EConnect
+{
 	CreateSocketFailed = 121,         // 创建socket失败
 	CloseSocketFailed = 122,          // 关闭socket失败
 	InValidIp = 123,                  // 无效ip地址
@@ -69,7 +75,8 @@ enum EConnect {
 
 
 // 连接管理服务 错误码范围[151---170]
-enum EConnServer {
+enum EConnServer
+{
     CreateMemPoolFailed = 151,        // 创建内存池失败
 	CreateEPollFailed = 152,          // 创建epoll模型失败
 	AddEPollListenerFailed = 153,     // 增加监听者失败
@@ -80,7 +87,8 @@ enum EConnServer {
 
 
 // 服务消息通信中间件 错误码范围[171---180]
-enum ESrvMsgComm {
+enum ESrvMsgComm
+{
 	InitSharedMutexError = 171,       // 初始化共享内存共享锁失败
     SrvMsgCommCfgError = 172,         // SrvMsgComm 段配置错误
 	ServiceIDCfgError = 173,          // ServiceID 段配置错误
@@ -96,7 +104,8 @@ enum ESrvMsgComm {
 
 
 // 服务框架 错误码范围[191---210]
-enum ESrvFrame {
+enum ESrvFrame
+{
 	NotRegisterService = 191,         // 未注册服务
 	LargeMessage = 192,               // 超大消息包不支持
 	LargeUserData = 193,              // 超大用户数据不支持
@@ -114,13 +123,23 @@ enum ESrvFrame {
 
 
 // MySql操作 错误码范围[211---230]
-enum EMySqlOpt {
+enum EMySqlOpt
+{
 	InitMySqlLibError = 211,          // 初始化MySql库失败错误
 	ConnectMySqlError = 212,          // 连接MySql错误
 	DoSqlCmmError = 213,              // 执行sql命令出错
 	GetSqlAllResultError = 214,       // 一次性获取所有查询结果集出错
 	GetSqlResultError = 215,          // 获取单个查询结果集出错
 	DoPreStmtCmmError = 216,          // 执行预处理sql命令出错
+};
+
+
+// HTTP基础库错误码范围[231 -- 240]
+enum EHttpBase
+{
+	HeaderDataError = 231,            // http消息头错误
+	BodyDataError = 232,              // http消息体错误
+	IncompleteBodyData = 233,         // 不完整的http消息体
 };
 
 

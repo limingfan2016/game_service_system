@@ -371,8 +371,7 @@ int CDBOpertaion::modifyTable(const char* sql, const unsigned int len)
 
 unsigned long CDBOpertaion::getAffectedRows()
 {
-	my_ulonglong rs = mysql_affected_rows(&m_mysqlHandler);
-	return (rs != (my_ulonglong)-1) ? (unsigned long)rs : 0;
+	return (unsigned long)mysql_affected_rows(&m_mysqlHandler);
 }
 
 
@@ -499,9 +498,14 @@ bool CDBOpertaion::rollback()
 }
 
 // 创建可在SQL语句中使用的合法SQL字符串
-unsigned long CDBOpertaion::realEscapeString(char* to, const char* from, unsigned long length)
+bool CDBOpertaion::realEscapeString(char* to, const char* from, unsigned long& length)
 {
-	return mysql_real_escape_string(&m_mysqlHandler, to, from, length);
+	const unsigned long retLength = mysql_real_escape_string(&m_mysqlHandler, to, from, length);
+	if (retLength == (unsigned long)-1) return false;
+	
+	length = retLength;
+	
+	return true;
 }
 
 

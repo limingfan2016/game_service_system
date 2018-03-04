@@ -387,7 +387,7 @@ public:
 	
 	// 其他操作
 public:
-	unsigned long realEscapeString(char* to, const char* from, unsigned long length);  // 创建可在SQL语句中使用的合法SQL字符串
+	bool realEscapeString(char* to, const char* from, unsigned long& length);  // 创建可在SQL语句中使用的合法SQL字符串
 
     // 数据库连接基本信息
 public:

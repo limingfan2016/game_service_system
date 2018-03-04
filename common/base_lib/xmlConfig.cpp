@@ -10,6 +10,8 @@
 #include <xercesc/util/XMLString.hpp>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "xmlConfig.h"
 
@@ -60,14 +62,33 @@ void ReadXml::setConfig(const char* xmlConfigFile, IXmlConfigBase& configVal)
 	configVal.__isSetConfigValueSuccess__ = false;
 	if (m_DOMXmlParser == NULL) return;
 	
+	if (xmlConfigFile == NULL || *xmlConfigFile == '\0')
+	{
+		printf("XML file name is null\n");
+		return;
+	}
+	
+	struct stat fInfo;
+	if (stat(xmlConfigFile, &fInfo) != 0)
+	{
+		printf("check XML file error, name = %s, error code = %d\n", xmlConfigFile, errno);
+		return;
+	}
+	
 	try
 	{
 		m_DOMXmlParser->parse(xmlConfigFile) ;
 		DOMDocument* xmlDoc = m_DOMXmlParser->getDocument();
+		if (xmlDoc == NULL)
+		{
+			printf("parse XML document error, file name = %s\n", xmlConfigFile);
+			return;
+		}
+		
 		DOMElement* root = xmlDoc->getDocumentElement();  // 取得根结点
 		if (root == NULL)
 		{
-			printf("empty XML document error\n");
+			printf("empty XML document error, file name = %s\n", xmlConfigFile);
 			return;
 		}
 		
@@ -75,7 +96,7 @@ void ReadXml::setConfig(const char* xmlConfigFile, IXmlConfigBase& configVal)
 		CXmlConfig::getNode((DOMNode*)root, MainType, MainValue, parentNode);
 		if (parentNode.size() < 1)
 		{
-			printf("can not find main config value error\n");
+			printf("can not find main config value error, file name = %s\n", xmlConfigFile);
 			return;
 		}
 		
@@ -86,7 +107,7 @@ void ReadXml::setConfig(const char* xmlConfigFile, IXmlConfigBase& configVal)
 	{
 		string msg;
 		CXmlConfig::charArrayToString(excp.getMessage(), msg);
-		printf("parsing file error : %s\n", msg.c_str());
+		printf("parsing xml file error, name = %s, msg = %s\n", xmlConfigFile, msg.c_str());
 	}
 }
 

@@ -96,12 +96,12 @@ namespace NDBOpt
 		{
 			if (m_predisContext)
 			{
-				ReleaseErrorLog("redis Connection error: %s", m_predisContext->errstr);
+				ReleaseErrorLog("redis Connection ip: %s, port: %d error: %s", ip, port, m_predisContext->errstr);
 				disconnectSvr();
 			}
 			else
 			{
-				ReleaseErrorLog("redis Connection error: can't allocate redis context");
+				ReleaseErrorLog("redis Connection error: can't allocate redis context, ip: %s, port: %d", ip, port);
 			}
 			return false;
 		}
