@@ -6,9 +6,9 @@ proto_tool="../../../../import/third_party/bin/protoc"
 chmod +x ${proto_tool}
  
 #set param
-output_src_dir="."
+output_src_dir="./protocol"
 proto_file_dir="../../../../src/common/protocol"
-proto_project_file="${proto_file_dir}/login_server.proto"
+proto_project_file="${proto_file_dir}/appsrv_game_hall.proto"
 proto_file_lst=${proto_project_file}
  
 #get all import protocol file
