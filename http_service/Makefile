@@ -1,22 +1,22 @@
 MAIN_PATH := ../../../../
 SRC_PATH := ../../../../src
+HTTP_BASE_PATH := ../../../../src/http_base
 COMMON_PATH := ../../../../src/common
 PROJECT_PATH := ../../project
-PROGRAM := ../../../../run/service/http_service/httpSrv
+PROGRAM := ../../../../run/service/http_operation/httpOperation
 
-CHANNEL = channel/nduo/*.cpp
-CHANNEL+= channel/uuc/*.cpp
-CHANNEL+= channel/huawei/*.cpp
-INC_PATH := -I/usr/local/include -I$(COMMON_PATH) -I$(PROJECT_PATH) -I$(SRC_PATH)/app/frame -I$(MAIN_PATH)/import/third_party/include/
+INC_PATH := -I/usr/local/include -I$(HTTP_BASE_PATH) -I$(COMMON_PATH) -I$(PROJECT_PATH) -I$(SRC_PATH)/app/frame -I$(MAIN_PATH)/import/third_party/include/
 
 LIB_PATH := -Wl,-Bstatic -L$(MAIN_PATH)/lib/ -L$(MAIN_PATH)/import/third_party/lib/
-LIBS     := $(LIB_PATH) -ldb -lhiredis -lserviceFrame -lmessageComm -lprojcommon -lconnect -lbase -pthread -lprotobuf -lxerces-c -Wl,-Bdynamic -lssl -lcurl -liconv -lcrypto
+LIBS   := $(LIB_PATH) -lprojcommon -lserviceFrame -lhttpbase -lmessageComm -ldb -lconnect -lbase -pthread -lhiredis -lprotobuf -lxerces-c -Wl,-Bdynamic -lssl -lcrypto
 
 CFLAGS = $(INC_PATH) -g -Wall -o2 -std=c++0x
 CC=g++
-SRC=$(wildcard *.cc)
-SRC+=$(wildcard *.cpp)
-SRC+= $(wildcard $(CHANNEL))
+
+PROTOCOL = protocol/*.cc
+SRC=$(wildcard *.cpp)
+SRC+= $(wildcard $(PROTOCOL))
+
 OBJ=$(addprefix ./, $(addsuffix .o, $(basename $(SRC))))
 TARGET= $(PROGRAM)
 
