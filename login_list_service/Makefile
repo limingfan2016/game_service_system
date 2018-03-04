@@ -59,7 +59,7 @@
 MY_CFLAGS = -I../../../common/ -I../../frame -I../../../../import/third_party/include -I../../../../import/third_party/include/mysql
  
 # The linker options.
-MY_LIBS   = -Wl,-Bstatic -L../../../../import/third_party/lib -L../../../../lib -lserviceFrame -lmessageComm -ldb -lmysqlclient -lconnect -lbase -lhiredis -lmemcached -levent -lprotobuf -lxerces-c -Wl,-Bdynamic -lpthread -lcurl -liconv -lrt -ldl
+MY_LIBS   = -Wl,-Bstatic -L../../../../import/third_party/lib -L../../../../lib -ldb -lconnect -lbase -lhiredis -lprotobuf -lxerces-c -Wl,-Bdynamic -lpthread
  
 # The pre-processor options used by the cpp (man cpp for more).
 CPPFLAGS  = -Wall -std=c++0x
@@ -73,7 +73,7 @@ SRCDIRS   =
  
 # The executable file name.
 # If not specified, current directory name or `a.out' will be used.
-PROGRAM   = ../../../../run/service/login_list_service/login_list_service
+PROGRAM   = ../../../../run/service/login_list/loginList
  
 ## Implicit Section: change the following only when necessary.
 ##==========================================================================

@@ -1,11 +1,12 @@
 
 /* author : liuxu
-* date : 2015.03.18
-* description : login_list_service 主入口
-*/
+ * date : 2015.03.18
+ * description : login_list 主入口
+ */
 
 #include "CLogic.h"
 #include "base/CProcess.h"
+
 
 CLogic g_logic;
 
@@ -22,6 +23,7 @@ int main(int argc, char *argv[])
 		printf("useage: ./bin ./config/common.cfg");
 		return 0;
 	}
+	
 	CCfg::useDefaultCfg(argv[1]);
 
 	

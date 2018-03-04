@@ -8,7 +8,7 @@ chmod +x ${proto_tool}
 #set param
 output_src_dir="."
 proto_file_dir="../../../../src/common/protocol"
-proto_project_file="${proto_file_dir}/app_server_loginlist.proto"
+proto_project_file="${proto_file_dir}/appsrv_login_list.proto"
 proto_file_lst=${proto_project_file}
  
 #get all import protocol file

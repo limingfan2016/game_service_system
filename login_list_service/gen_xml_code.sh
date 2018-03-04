@@ -6,7 +6,7 @@ chmod +x ${xml_tool}
  
 #set param
 output_src_dir="."
-xml_file_dir="../../../../run/service/login_list_service/config"
+xml_file_dir="../../../../run/service/login_list/config"
 xml_config_file="${xml_file_dir}/business.xml"
 
 #gen code
