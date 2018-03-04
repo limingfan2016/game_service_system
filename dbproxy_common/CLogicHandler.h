@@ -1,122 +1,77 @@
 
 /* author : limingfan
-* date : 2016.02.24
-* description : 消息处理辅助类
-*/
+ * date : 2017.11.26
+ * description : 消息处理辅助类
+ */
  
 #ifndef __CLOGIC_HANDLER_H__
 #define __CLOGIC_HANDLER_H__
 
-#include <string>
 #include "SrvFrame/CModule.h"
-#include "db/CMySql.h"
-#include "db/CMemcache.h"
-#include "app_server_dbproxy_common.pb.h"
-#include "base/CCfg.h"
-#include "base/CLogger.h"
-#include "MessageDefine.h"
-#include "_DbproxyCommonConfig_.h"
-#include "_MallConfigData_.h"
+#include "BaseDefine.h"
 
 
-class CSrvMsgHandler;
+class CMsgHandler;
 
 using namespace NCommon;
 using namespace NFrame;
-using namespace std;
-using namespace NDBOpt;
-using namespace NErrorCode;
+using namespace NProject;
 
 
-// 兑换的游戏商品数据
-typedef map<unsigned int, unsigned int> GoodsIdToNum;
-struct GameGoodsData
-{
-	unsigned int coinCount;                     // 需要的源商品总数量，渔币或者钻石
-	unsigned int coinType;                      // 源商品总类型，渔币或者钻石
-	GoodsIdToNum id2num;                        // 兑换的目标商量类型及数量
-};
-
-
-class CLogicHandler : public NFrame::CHandler
+class CDBLogicHandler : public NFrame::CHandler
 {
 public:
-	CLogicHandler();
-	~CLogicHandler();
-	
+	CDBLogicHandler();
+	~CDBLogicHandler();
+
 public:
-	int init(CSrvMsgHandler* pMsgHandler);
+	int init(CMsgHandler* pMsgHandler);
+	void unInit();
     void updateConfig();
-	
+
 public:
-	const com_protocol::FishCoinInfo* getFishCoinInfo(const unsigned int platformId, const unsigned int id);
-	
-	// 获取服务的逻辑数据
-    int getLogicData(const char* firstKey, const unsigned int firstKeyLen, const char* secondKey, const unsigned int secondKeyLen, ::google::protobuf::Message& msg);
+    // 设置记录基本信息
+    void setRecordBaseInfo(com_protocol::ChangeRecordBaseInfo& recordInfo, unsigned int srcSrvId,
+						   const string& hallId, const string& roomId, int roomRate, int optType,
+						   const RecordIDType recordId, const char* remark = "");
+	// 道具变更记录
+    int recordItemChange(const string& username, const google::protobuf::RepeatedPtrField<com_protocol::ItemChange>& goodsList,
+						 const com_protocol::ChangeRecordBaseInfo& recordData, const com_protocol::ChangeRecordPlayerInfo& playerInfo);
+						 
+	void writeItemDataLog(const google::protobuf::RepeatedPtrField<com_protocol::ItemChange>& items,
+                          const string& srcName, const string& dstName,
+						  int optType, int result, const char* info = "");
 
-	// 获取游戏或者大厅的逻辑数据
-	void getLogicData(const com_protocol::GetUserBaseinfoReq& req, com_protocol::GetUserBaseinfoRsp& rsp);
-	
-	//获取兑换商品所需积分
-	const MallConfigData::scores_item* getExchangeItemCfg(uint32 nItemId) const;
+	// 金币&道具&玩家属性等数量变更修改
+    int changeUserGoodsValue(const string& hall_id, const string& username, google::protobuf::RepeatedPtrField<com_protocol::ItemChange>& goodsList, CUserBaseinfo& userBaseinfo,
+                             const com_protocol::ChangeRecordBaseInfo& recordData, const com_protocol::ChangeRecordPlayerInfo& playerInfo);
+								
+private:
+    int getInvitationPlayerInfo(const char* hallId, const char* username, const char* sql, unsigned int sqlLen, const unsigned int invitationCount,
+                                google::protobuf::RepeatedPtrField<com_protocol::InvitationInfo>& invitations, int& currentIdx);
 	
 private:
-    // 虚拟道具兑换
-	void getGameMallCfg(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-	void exchangeGameGoods(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-	
-	// 渔币信息
-	void getMallFishCoinInfo(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-	
-	// 话费、实物兑换
-	void getExchangeMallCfg(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-	void exchangePhoneFare(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-	void exchangeGiftGoods(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-	
-	// 获取公共配置
-	void getGameCommonConfig(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-	
-	// 获取首冲礼包信息
-    void getFirstRechargeInfo(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-
-	// void receiveSuperValuePackageGift(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-	
-	// 获取积分商城信息
-	void getScoresShopInfo(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-
-	//兑换积分商品
-	void exchangeScoresItem(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-
-	//聊天记录
-	void chatLog(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-
-	void handlePKPlaySettlementOfAccountsReq(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
-
-	void chatLogToMysql(unsigned int timerId, int userId, void* param, unsigned int remainCount);
-	
-private:
-	bool getGameGoodsInfo(const com_protocol::ExchangeGameGoogsReq& msg, GameGoodsData& gameGoodsData);
-
-	//获取指定积分商品的剩余数量
-	uint32 getExchangeItemNum(uint32 nItemId);
-
-	//兑换记录
-	bool exchangeLog(uint32 nItemId);
-
-	//还原兑换记录
-	void reExchangeLog(const MallConfigData::ScoresShop &scoresShopCfg);
-
-	typedef unordered_map<uint32, uint32>::value_type exchange_value;
+	void changeItem(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
+	void changeMoreUsersItem(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
 
 private:
-	CSrvMsgHandler* m_msgHandler;
+    void getInvitationList(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
 	
-	com_protocol::GetGameMallCfgRsp m_gameMallCfgRsp;
-	com_protocol::GetExchangeInfoRsp m_exchangeInfoRsp;
+	void setLastPlayers(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
+	void getLastPlayerList(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
+	
+	void getHallPlayerList(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
 
-	unsigned int					m_clearExchangeLogFlag;		//清空积分商品兑换记录标记
-	unordered_map<uint32, uint32>	m_exchangeLog;				//积分商品兑换记录	
-	string							m_chatLogSql;				//
+private:
+    void getGameRecord(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
+	void getDetailedGameRecord(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
+
+
+private:
+	CMsgHandler* m_msgHandler;
+	
+	HallLastPlayerList m_hallLastPlayers;
 };
+
 
 #endif // __CLOGIC_HANDLER_H__

@@ -1,57 +1,63 @@
 
 /* author : liuxu
-* date : 2015.06.04
-* description : 游戏记录
-*/
+ * modify : limingfan
+ * date : 2015.06.04
+ * description : 游戏记录
+ */
  
 #include <stdio.h>
 #include <limits.h>
 #include <string.h>
-#include <iostream>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "../common/CommonType.h"
-#include "base/Function.h"
 #include "CGameRecord.h"
-#include "MessageDefine.h"
-#include "_MallConfigData_.h"
-#include "CSrvMsgHandler.h"
-#include "SrvFrame/CModule.h"
-#include "CLogic.h"
-#include "base/Function.h"
-#include "db/CMySql.h"
-#include "base/CMD5.h"
+#include "CMsgHandler.h"
 
-
-using namespace NProject;
 
 CGameRecord::CGameRecord()
 {
-	m_arrBuyuRecord = NULL;
-
-	m_p_msg_handler = NULL;
-	for (int i = 0; i < NProject::GameType::MAX_GAME_TYPE; i++)
-	{
-		m_p_arrDBOpt[i] = NULL;
-	}
+	m_pMsgHandler = NULL;
+	m_arrRecord = NULL;
+	m_pRecordDBOpt = NULL;
 }
 
 CGameRecord::~CGameRecord()
 {
-	if (m_arrBuyuRecord)
+	if (m_arrRecord)
 	{
-		DELETE_ARRAY(m_arrBuyuRecord);
+		DELETE_ARRAY(m_arrRecord);
 	}
 	
-	m_p_msg_handler = NULL;
+	m_pMsgHandler = NULL;
+	m_pRecordDBOpt = NULL;
 }
 
-void CGameRecord::setParam(CSrvMsgHandler *p_msg_handler)
+bool CGameRecord::init(CMsgHandler* p_msg_handler)
 {
-	m_p_msg_handler = p_msg_handler;
+	m_pMsgHandler = p_msg_handler;
+	
+	/*
+	unInitMysqlHandler();
+	if (!initMysqlHandler()) return false;
+
+    uint32_t cur_timestamp = time(NULL);
+	NEW_ARRAY(m_arrRecord, SRecordCache[m_pMsgHandler->m_pDBCfg->record_db_cfg.db_table_count]);
+	for (uint32_t i = 0; i < m_pMsgHandler->m_pDBCfg->record_db_cfg.db_table_count; ++i)
+	{
+		m_arrRecord[i].cur_count = 0;
+		m_arrRecord[i].last_exe_timestamp = cur_timestamp;
+	}
+    */
+
+	return true;
+}
+
+void CGameRecord::unInit()
+{
+	// unInitMysqlHandler();
 }
 
 bool CGameRecord::loadConfig()
@@ -59,19 +65,17 @@ bool CGameRecord::loadConfig()
 	return true;
 }
 
-bool CGameRecord::init()
+bool CGameRecord::initMysqlHandler()
 {
-	unInitMysqlHandler();
-	if (!initMysqlHandler())
+	const DBConfig::MysqlRecordDBCfg& grdCfg = m_pMsgHandler->getSrvOpt().getDBCfg().record_db_cfg;
+	if (0 != CMySql::createDBOpt(m_pRecordDBOpt, grdCfg.ip.c_str(), grdCfg.username.c_str(),
+		grdCfg.password.c_str(), grdCfg.dbname.c_str(), grdCfg.port))
 	{
+		ReleaseErrorLog("Game record CMySql::createDBOpt failed. ip:%s username:%s passwd:%s dbname:%s port:%d",
+	    grdCfg.ip.c_str(), grdCfg.username.c_str(), grdCfg.password.c_str(),
+		grdCfg.dbname.c_str(), grdCfg.port);
+		
 		return false;
-	}
-	NEW_ARRAY(m_arrBuyuRecord, SBuyuRecordCache[m_p_msg_handler->m_config.game_record_config[NProject::GameType::BUYU].table_count]);
-	uint32_t cur_timestamp = time(NULL);
-	for (uint32_t i = 0; i < m_p_msg_handler->m_config.game_record_config[NProject::GameType::BUYU].table_count; i++)
-	{
-		m_arrBuyuRecord[i].cur_count = 0;
-		m_arrBuyuRecord[i].last_exe_timestamp = cur_timestamp;
 	}
 
 	return true;
@@ -79,216 +83,124 @@ bool CGameRecord::init()
 
 void CGameRecord::unInitMysqlHandler()
 {
-	for (int i = NProject::GameType::BUYU; i < NProject::GameType::MAX_GAME_TYPE; i++)
+	if (m_pRecordDBOpt)
 	{
-		if (m_p_arrDBOpt[i])
-		{
-			CMySql::destroyDBOpt(m_p_arrDBOpt[i]);
-			m_p_arrDBOpt[i] = NULL;
-		}
+		CMySql::destroyDBOpt(m_pRecordDBOpt);
+		m_pRecordDBOpt = NULL;
 	}
 }
 
-bool CGameRecord::initMysqlHandler()
-{
-	const vector<DbproxyCommonConfig::GameRecordConfig> &game_record_config = m_p_msg_handler->m_config.game_record_config;
-	for (int i = NProject::GameType::BUYU; i < NProject::GameType::MAX_GAME_TYPE; i++)
-	{
-		if (0 != CMySql::createDBOpt(m_p_arrDBOpt[i], game_record_config[i].mysql_ip.c_str(), game_record_config[i].mysql_username.c_str(),
-			game_record_config[i].mysql_password.c_str(), game_record_config[i].mysql_dbname.c_str(), game_record_config[i].mysql_port))
-		{
-			ReleaseErrorLog("Game record CMySql::createDBOpt failed. ip:%s username:%s passwd:%s dbname:%s port:%d", game_record_config[i].mysql_ip.c_str(),
-				game_record_config[i].mysql_username.c_str(), game_record_config[i].mysql_password.c_str(), game_record_config[i].mysql_dbname.c_str(), game_record_config[i].mysql_port);
-			return false;
-		}
-	}
 
-	return true;
-}
-
-bool CGameRecord::getCurCount(uint32_t item_type, const CUserBaseinfo *p_user_info, uint64_t &cur_count)
+bool CGameRecord::getCurCount(uint32_t item_type, const CUserBaseinfo* p_user_info, double& cur_count)
 {
 	if (p_user_info == NULL)
 	{
-		OptErrorLog("CGameRecord getCurCount, p_user_info == NULL");
+		OptErrorLog("get current item count, p_user_info == NULL");
+		
 		return false;
 	}
 
-    item_type = parseGameGoodsType(item_type);
-	switch (item_type)
+    const unsigned int itemType = parseGameGoodsType(item_type);
+	switch (itemType)
 	{
-	case PropGold:				//金币
+	case EGoodsRMB:
+	    cur_count = p_user_info->dynamic_info.rmb_gold;
+	    break;
+	
+	case EGoodsGold:
 		cur_count = p_user_info->dynamic_info.game_gold;
 		break;
-	case PropFishCoin:				//渔币
-		cur_count = p_user_info->dynamic_info.rmb_gold;
-		break;
-	case PropTelephoneFare:		//话费卡
-		cur_count = p_user_info->dynamic_info.phone_card_number;
-		break;
-	case PropSuona:				//小喇叭
-		cur_count = p_user_info->prop_info.suona_count;
-		break;
-	case PropLightCannon:		//激光炮
-		cur_count = p_user_info->prop_info.light_cannon_count;
-		break;
-	case PropFlower:				//鲜花
-		cur_count = p_user_info->prop_info.flower_count;
-		break;
-	case PropMuteBullet:			//哑弹
-		cur_count = p_user_info->prop_info.mute_bullet_count;
-		break;
-	case PropSlipper:			//拖鞋
-		cur_count = p_user_info->prop_info.slipper_count;
-		break;
-	case PropVoucher:			//奖券
-		cur_count = p_user_info->dynamic_info.voucher_number;
-		break;
-	case PropAutoBullet:			//自动炮子弹
-		cur_count = p_user_info->prop_info.auto_bullet_count;
-		break;
-	case PropLockBullet:			//锁定炮子弹
-		cur_count = p_user_info->prop_info.lock_bullet_count;
-		break;
-	case PropDiamonds:			//钻石
-		cur_count = p_user_info->dynamic_info.diamonds_number;
-		break;
-	case PropPhoneFareValue:	//话费额度
-		cur_count = p_user_info->dynamic_info.phone_fare;
-		break;
-
-	case PropScores:			//积分
-		cur_count = p_user_info->dynamic_info.score;
-		break;
-
-	case PropRampage:			//狂暴
-		cur_count = p_user_info->prop_info.rampage_count;
-		break;
-
-	case PropDudShield:			//哑弹防护
-		cur_count = p_user_info->prop_info.dud_shield_count;
-		break;
-
-	case EUserInfoFlag::EVipLevel:	        // VIP 等级
-		cur_count = p_user_info->dynamic_info.vip_level;
-		break;
-	case EUserInfoFlag::ERechargeAmount:	// 累积充值的总额度
-		cur_count = p_user_info->dynamic_info.sum_recharge;
-		break;
 		
-	case EPropType::EPKDayGoldTicket:	   // PK场全天金币对战门票
-	case EPropType::EPKHourGoldTicket:	   // PK场限时金币对战门票
-	{
-		cur_count = getPKGoldTicketCount(item_type, p_user_info);
-		break;
-	}
+	case EGoodsRoomCard:
+	    cur_count = p_user_info->dynamic_info.room_card;
+	    break;
 	
 	default:
-		OptErrorLog("procBuyuGameRecord, the item type invalid, user = %s, type = %u,", p_user_info->static_info.username, item_type);
+		OptErrorLog("get goods type for record, the type invalid, user = %s, type = %u, parse type = %u",
+		p_user_info->static_info.username, item_type, itemType);
 		return false;
 	}
 	
 	return true;
 }
 
-// 获取PK场金币对战门票数量
-uint64_t CGameRecord::getPKGoldTicketCount(uint32_t item_type, const CUserBaseinfo *p_user_info)
+void CGameRecord::procRecord(const char* cur_date_time, uint32_t item_type, int32_t charge_count, const char* remark,
+                             const uint32_t db_table_id, const char* record_name, const char* record_id, const CUserBaseinfo* p_user_info)
 {
-	unsigned int allCount = 0;
-	unsigned int dayCount = 0;
-	const com_protocol::PKTicket& pkTicket = m_p_msg_handler->getLogicDataInstance().getLogicData(p_user_info->static_info.username, strlen(p_user_info->static_info.username)).logicData.pk_ticket();
-	for (int idx = 0; idx < pkTicket.gold_ticket_size(); ++idx)
-	{
-		const com_protocol::Ticket& ticket = pkTicket.gold_ticket(idx);
-		allCount += ticket.count();
-		if (!ticket.has_begin_hour()) dayCount += ticket.count();
-	}
+	// 获取对应物品当前数量
+	double goods_cur_count = 0;
+	if (!getCurCount(item_type, p_user_info, goods_cur_count)) return;
 	
-	return (item_type == EPropType::EPKDayGoldTicket) ? dayCount : (allCount - dayCount);
-}
+	// 把数据放到缓冲
+	const int cur_index = m_arrRecord[db_table_id].cur_count;
+	if (0 == cur_index) m_arrRecord[db_table_id].last_exe_timestamp = time(NULL);
+	
+	SRecordDetail* pcur_record = &(m_arrRecord[db_table_id].record[cur_index]);
+	strncpy(pcur_record->username, p_user_info->static_info.username, sizeof(pcur_record->username) - 1);
+	strncpy(pcur_record->record_time, cur_date_time, sizeof(pcur_record->record_time) - 1);
+	strncpy(pcur_record->record_name, record_name, sizeof(pcur_record->record_name) - 1);
+	strncpy(pcur_record->record_id, record_id, sizeof(pcur_record->record_id) - 1);
+	strncpy(pcur_record->remark, remark, sizeof(pcur_record->remark) - 1);
 
-void CGameRecord::procGameRecord(const com_protocol::GameRecordPkg &pkg, const CUserBaseinfo *p_user_info, bool bRecordProp)
-{
-	switch (pkg.game_type())
+	pcur_record->item_type = item_type;
+	pcur_record->charge_count = charge_count;
+	pcur_record->cur_count = goods_cur_count;
+	
+	++m_arrRecord[db_table_id].cur_count;
+
+	// 缓冲区满了或者达到配置数量值则一次性写到DB
+	if (m_arrRecord[db_table_id].cur_count >= (int)MAX_RECORD_CACHE_COUNT
+	    || m_arrRecord[db_table_id].cur_count >= (int)m_pMsgHandler->getSrvOpt().getDBCfg().record_db_cfg.need_commit_count)
 	{
-	case NProject::GameRecordType::Game:
-	case NProject::GameRecordType::Buyu:
-		procBuyuGameRecord(pkg, p_user_info);
-		break;
-		
-	case NProject::GameRecordType::BuyuExt:
-		procBuyuGameRecordExt(pkg, p_user_info, bRecordProp);
-		break;
-
-	default:
-		OptErrorLog("procGameRecord|Unknow game_type:%u", pkg.game_type());
-		break;
+		commitRecord(db_table_id);
 	}
 }
 
-bool CGameRecord::commitAllRecord()
+bool CGameRecord::commitAllRecord(bool is_check_timeout)
 {
-	bool ret = commitBuyuAllRecord();
-
-	return ret;
-}
-
-bool CGameRecord::checkCommitRecord()
-{
-	bool ret = commitBuyuAllRecord(true);
-
-	return ret;
-}
-
-bool CGameRecord::commitBuyuAllRecord(bool is_check_timeout)
-{
-	uint32_t cur_timestamp = time(NULL);
-	bool ret = false;
-	for (size_t i = 0; i < m_p_msg_handler->m_config.game_record_config[NProject::GameType::BUYU].table_count; i++)
+	/*
+	const uint32_t cur_timestamp = time(NULL);
+	const unsigned int dbTableCount = m_pMsgHandler->m_pDBCfg->record_db_cfg.db_table_count;
+	const unsigned int checkTimeGap = m_pMsgHandler->m_pDBCfg->record_db_cfg.commit_time_gap;
+	
+	for (unsigned int i = 0; i < dbTableCount; i++)
 	{
-		ret = true;
-		if (is_check_timeout && cur_timestamp - m_arrBuyuRecord[i].last_exe_timestamp >= m_p_msg_handler->m_config.server_config.check_time_gap)
+		if (!is_check_timeout || (cur_timestamp - m_arrRecord[i].last_exe_timestamp) >= checkTimeGap)
 		{
-			ret = commitBuyuTableRecord(i);
-		}
-		else if (!is_check_timeout)
-		{
-			ret = commitBuyuTableRecord(i);
-		}
-
-		if (!ret)
-		{
-			return ret;
+			if (!commitRecord(i)) return false;
 		}
 	}
+	*/
+
 	return true;
 }
 
-bool CGameRecord::commitBuyuTableRecord(int32_t table_id)
+bool CGameRecord::commitRecord(int32_t db_table_id)
 {
-	if (m_arrBuyuRecord == NULL || m_arrBuyuRecord[table_id].cur_count == 0)
+	if (m_arrRecord == NULL || m_arrRecord[db_table_id].cur_count == 0)
 	{
 		return true;
 	}
 
-	//格式sql语句
-	int sql_size = 0;
-	static char sql[1024 * MAX_BUYU_RECOUND_CACHE_COUNT] = { 0 };
-	SBuyuRecordCache *precord_cache = &m_arrBuyuRecord[table_id];
+	// 格式sql语句
 	int cur_index = 0;
-	sql_size = snprintf(sql, sizeof(sql), "insert into tb_buyu_game_records_%03u(username,record_time,room_rate,room_name,item_type,charge_count,cur_count,remark,record_id)", table_id);
-	sql_size += snprintf(sql + sql_size, sizeof(sql)-sql_size, " values(\'%s\', \'%s\', %u, \'%s\', %u, %d, %lu, \'%s\', \'%s\')", precord_cache->record[cur_index].username,
-		precord_cache->record[cur_index].record_time, precord_cache->record[cur_index].room_rate, precord_cache->record[cur_index].room_name, precord_cache->record[cur_index].item_type,
-		precord_cache->record[cur_index].charge_count, precord_cache->record[cur_index].cur_count, precord_cache->record[cur_index].remark, precord_cache->record[cur_index].record_id);
-	for (cur_index = 1; cur_index < precord_cache->cur_count; cur_index++)
+	static char sql[1024 * MAX_RECORD_CACHE_COUNT] = {0};
+	SRecordCache* precord_cache = &m_arrRecord[db_table_id];
+	const SRecordDetail& fRdDetail = precord_cache->record[cur_index];
+	
+	unsigned int sql_size = snprintf(sql, sizeof(sql) - 1, "insert into tb_user_game_records_%03u(username,record_time,record_name,record_id,item_type,charge_count,cur_count,remark) values(\'%s\', \'%s\', \'%s\', \'%s\', %u, %d, %.2f, \'%s\')",
+	                                 db_table_id, fRdDetail.username, fRdDetail.record_time, fRdDetail.record_name,
+									 fRdDetail.record_id, fRdDetail.item_type, fRdDetail.charge_count, fRdDetail.cur_count, fRdDetail.remark);
+	for (cur_index = 1; cur_index < precord_cache->cur_count; ++cur_index)
 	{
-		sql_size += snprintf(sql + sql_size, sizeof(sql)-sql_size, ",(\'%s\', \'%s\', %u, \'%s\', %u, %d, %lu, \'%s\', \'%s\')", precord_cache->record[cur_index].username,
-			precord_cache->record[cur_index].record_time, precord_cache->record[cur_index].room_rate, precord_cache->record[cur_index].room_name, precord_cache->record[cur_index].item_type,
-			precord_cache->record[cur_index].charge_count, precord_cache->record[cur_index].cur_count, precord_cache->record[cur_index].remark, precord_cache->record[cur_index].record_id);
+		const SRecordDetail& rdDetail = precord_cache->record[cur_index];
+		sql_size += snprintf(sql + sql_size, sizeof(sql) - sql_size - 1, ",(\'%s\', \'%s\', \'%s\', \'%s\', %u, %d, %.2f, \'%s\')",
+		                     rdDetail.username, rdDetail.record_time, rdDetail.record_name, rdDetail.record_id,
+							 rdDetail.item_type, rdDetail.charge_count, rdDetail.cur_count, rdDetail.remark);
 	}
-	sql_size += snprintf(sql + sql_size, sizeof(sql)-sql_size, ";");
+	sql_size += snprintf(sql + sql_size, sizeof(sql) - sql_size - 1, ";");
 
-	//统计时间
+	// 统计时间
 	unsigned long long start;
 	unsigned long long end;
 	struct timeval startTime;
@@ -296,115 +208,78 @@ bool CGameRecord::commitBuyuTableRecord(int32_t table_id)
 	gettimeofday(&startTime, NULL);
 	start = startTime.tv_sec * 1000000 + startTime.tv_usec;
 
-	//执行sql
-	int rc = m_p_arrDBOpt[NProject::GameType::BUYU]->executeSQL(sql, sql_size);
+	// 执行sql
+	int rc = m_pRecordDBOpt->executeSQL(sql, sql_size);
 
 	gettimeofday(&endTime, NULL);
 	end = endTime.tv_sec * 1000000 + endTime.tv_usec;
 	unsigned long long timeuse = end - start;
-	ReleaseInfoLog("muilty sql exe|%d|%lu|%lf", precord_cache->cur_count, timeuse, 1000000.0 / ((double)timeuse / (double)precord_cache->cur_count));
+	ReleaseInfoLog("write game record muilty sql exe|%d|%lu|%lf", precord_cache->cur_count, timeuse, 1000000.0 / ((double)timeuse / (double)precord_cache->cur_count));
 	if (Success != rc)
 	{
-		ReleaseErrorLog("insert error|%d|%s", rc, sql);
+		ReleaseErrorLog("write game record insert error|%d|%s", rc, sql);
 	}
 
-	//重新初使化
+	// 重新初使化
 	precord_cache->cur_count = 0;
 	precord_cache->last_exe_timestamp = time(NULL);
 
 	return rc == ECommon::Success;
 }
 
-void CGameRecord::procBuyuGameRecord(const com_protocol::GameRecordPkg &pkg, const CUserBaseinfo *p_user_info)
-{
-	com_protocol::BuyuGameRecordStorage record;
-	if (!record.ParseFromArray(pkg.game_record_bin().c_str(), pkg.game_record_bin().length()))
-	{
-		char log[1024];
-		b2str(pkg.game_record_bin().c_str(), (int)pkg.game_record_bin().length(), log, (int)sizeof(log));
-		OptErrorLog("--- procBuyuGameRecord--- unpack failed.| len:%u, data:%s", pkg.game_record_bin().length(), log);
-		return;
-	}
 
-	//获取日期
-	char cur_date_time[21] = { 0 };
-	uint32_t table_id = strToHashValue(p_user_info->static_info.username) % m_p_msg_handler->m_config.game_record_config[NProject::GameType::BUYU].table_count;
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	struct tm* pTm = localtime(&tv.tv_sec);
-	snprintf(cur_date_time, sizeof(cur_date_time), "%04d-%02d-%02d %02d:%02d:%02d", (pTm->tm_year + 1900), (pTm->tm_mon + 1), pTm->tm_mday,
-		pTm->tm_hour, pTm->tm_min, pTm->tm_sec);
-		
-	procBuyuGameRecord(cur_date_time, record.room_name().c_str(), record.room_rate(), record.item_type(), record.charge_count(), record.remark().c_str(), table_id,
-	                   record.record_id().c_str(), p_user_info);
+void CGameRecord::procUserGameRecord(const com_protocol::UserGameRecordPkg& pkg)
+{
+	CUserBaseinfo user_baseinfo;
+	for (int idx = 0; idx < pkg.game_record_size(); ++idx)
+	{
+		const com_protocol::GameRecordPkg& userPkg = pkg.game_record(idx);
+		if (m_pMsgHandler->getUserBaseinfo(userPkg.username(), "", user_baseinfo) == SrvOptSuccess)
+		{
+		    procGameRecord(userPkg, &user_baseinfo);
+		}
+		else
+		{
+			OptErrorLog("get user info for game record error, username = %s", userPkg.username().c_str());
+		}
+	}
 }
 
-void CGameRecord::procBuyuGameRecordExt(const com_protocol::GameRecordPkg &pkg, const CUserBaseinfo *p_user_info, bool bRecordProp)
+void CGameRecord::procGameRecord(const com_protocol::GameRecordPkg& pkg, const CUserBaseinfo* p_user_info)
 {
-	com_protocol::BuyuGameRecordStorageExt record;
+	com_protocol::GameRecordStorage record;
 	if (!record.ParseFromArray(pkg.game_record_bin().c_str(), pkg.game_record_bin().length()))
 	{
-		char log[1024];
-		b2str(pkg.game_record_bin().c_str(), (int)pkg.game_record_bin().length(), log, (int)sizeof(log));
-		OptErrorLog("--- procBuyuGameRecordExt--- unpack failed.| len:%u, data:%s", pkg.game_record_bin().length(), log);
+		OptErrorLog("handle game record unpack error.| len:%u, user:%s",
+		pkg.game_record_bin().length(), p_user_info->static_info.username);
+		
 		return;
 	}
 
-	//获取日期
+	// 获取日期
 	char cur_date_time[21] = { 0 };
-	uint32_t table_id = strToHashValue(p_user_info->static_info.username) % m_p_msg_handler->m_config.game_record_config[NProject::GameType::BUYU].table_count;
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	struct tm* pTm = localtime(&tv.tv_sec);
-	snprintf(cur_date_time, sizeof(cur_date_time), "%04d-%02d-%02d %02d:%02d:%02d", (pTm->tm_year + 1900), (pTm->tm_mon + 1), pTm->tm_mday,
-		pTm->tm_hour, pTm->tm_min, pTm->tm_sec);
+	snprintf(cur_date_time, sizeof(cur_date_time) - 1, "%04d-%02d-%02d %02d:%02d:%02d",
+	         (pTm->tm_year + 1900), (pTm->tm_mon + 1), pTm->tm_mday, pTm->tm_hour, pTm->tm_min, pTm->tm_sec);
 		
+    // 用户名索引到记录DB中的记录表ID
+	uint32_t db_table_id = strToHashValue(p_user_info->static_info.username) % m_pMsgHandler->getSrvOpt().getDBCfg().record_db_cfg.db_table_count;
 	for (int idx = 0; idx < record.items_size(); ++idx)
 	{
 		const com_protocol::ItemRecordStorage& item = record.items(idx);
-		procBuyuGameRecord(cur_date_time, record.room_name().c_str(), record.room_rate(), item.item_type(), item.charge_count(), record.remark().c_str(), table_id,
-			record.record_id().c_str(), p_user_info, bRecordProp);
+		procRecord(cur_date_time, item.item_type(), item.charge_count(), record.remark().c_str(), db_table_id,
+			       record.record_name().c_str(), record.record_id().c_str(), p_user_info);
 	}
 }
 
-void CGameRecord::procBuyuGameRecord(const char* cur_date_time, const char* room_name, int32_t room_rate, uint32_t item_type, int32_t charge_count,
-                                     const char* remark, uint32_t table_id, const char* record_id, const CUserBaseinfo *p_user_info, bool bRecordProp)
+bool CGameRecord::commitAllGameRecord()
 {
-	//获取对应物品当前数量
-	uint64_t cur_count = 0;
-	if (bRecordProp)
-	{
-		if (!getCurCount(item_type, p_user_info, cur_count))
-			return;
-	}
-	
-	//把数据放到缓冲
-	int cur_index = m_arrBuyuRecord[table_id].cur_count;
-	SBuyuRecordDetail *pcur_record = &(m_arrBuyuRecord[table_id].record[cur_index]);
-	strncpy(pcur_record->username, p_user_info->static_info.username, sizeof(pcur_record->username) - 1);
-	pcur_record->username[sizeof(pcur_record->username) - 1] = '\0';
-	strncpy(pcur_record->record_time, cur_date_time, sizeof(pcur_record->record_time) - 1);
-	pcur_record->record_time[sizeof(pcur_record->record_time) - 1] = '\0';
-	strncpy(pcur_record->room_name, room_name, sizeof(pcur_record->room_name) - 1);
-	pcur_record->room_name[sizeof(pcur_record->room_name) - 1] = '\0';
-	strncpy(pcur_record->remark, remark, sizeof(pcur_record->remark) - 1);
-	pcur_record->remark[sizeof(pcur_record->remark) - 1] = '\0';
-	pcur_record->room_rate = room_rate;
-	pcur_record->item_type = item_type;
-	pcur_record->charge_count = charge_count;
-	pcur_record->cur_count = cur_count;
-	strncpy(pcur_record->record_id, record_id, sizeof(pcur_record->record_id) - 1);
-	
-	m_arrBuyuRecord[table_id].cur_count++;
-	if (0 == cur_index)
-	{
-		m_arrBuyuRecord[table_id].last_exe_timestamp = time(NULL);
-	}
-
-	//缓冲区满了就一次性写到DB
-	if (MAX_BUYU_RECOUND_CACHE_COUNT == m_arrBuyuRecord[table_id].cur_count)
-	{
-		commitBuyuTableRecord(table_id);
-	}
+	return commitAllRecord(false);
 }
 
+bool CGameRecord::checkCommitGameRecord()
+{
+	return commitAllRecord(true);
+}

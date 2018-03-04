@@ -59,7 +59,7 @@
 MY_CFLAGS = -I../../../common/ -I../../frame -I../../../../import/third_party/include -I../../../../import/third_party/include/mysql
  
 # The linker options.
-MY_LIBS   = -Wl,-Bstatic -L../../../../import/third_party/lib -L../../../../lib -lserviceFrame -lprojcommon -lmessageComm -ldb -lmysqlclient -lconnect -lbase -lhiredis -lmemcached -levent -lprotobuf -lxerces-c -Wl,-Bdynamic -lpthread -lrt -ldl -lcurl -liconv 
+MY_LIBS   = -Wl,-Bstatic -L../../../../import/third_party/lib -L../../../../lib -lprojcommon -lserviceFrame -lmessageComm -ldb -lmysqlclient -lconnect -lbase -lhiredis -lmemcached -lprotobuf -lxerces-c -Wl,-Bdynamic -lpthread -ldl -liconv -lcrypto 
  
 # The pre-processor options used by the cpp (man cpp for more).
 CPPFLAGS  = -Wall -std=c++0x
@@ -73,7 +73,7 @@ SRCDIRS   =
  
 # The executable file name.
 # If not specified, current directory name or `a.out' will be used.
-PROGRAM   = ../../../../run/service/dbproxy_common/dbproxy_common
+PROGRAM   = ../../../../run/service/db_proxy/dbProxy
  
 ## Implicit Section: change the following only when necessary.
 ##==========================================================================
@@ -120,9 +120,13 @@ ifeq ($(PROGRAM),)
     PROGRAM = a.out
   endif
 endif
+
+PROTOCOL = ./protocol
 ifeq ($(SRCDIRS),)
   SRCDIRS = .
+  SRCDIRS+=$(PROTOCOL)
 endif
+
 SOURCES = $(foreach d,$(SRCDIRS),$(wildcard $(addprefix $(d)/*,$(SRCEXTS))))
 HEADERS = $(foreach d,$(SRCDIRS),$(wildcard $(addprefix $(d)/*,$(HDREXTS))))
 SRC_CXX = $(filter-out %.c,$(SOURCES))
@@ -222,11 +226,11 @@ ctags: $(HEADERS) $(SOURCES)
 $(PROGRAM):$(OBJS)
 ifeq ($(SRC_CXX),)              # C program
 	$(LINK.c)   $(OBJS) $(MY_LIBS) -o $@
-	rm -f $(OBJS) *.d
+	rm -f $(OBJS) *.d $(PROTOCOL)/*.d
 	@echo Type ./$@ to execute the program.
 else                            # C++ program
 	$(LINK.cxx) $(OBJS) $(MY_LIBS) -o $@
-	rm -f $(OBJS) *.d
+	rm -f $(OBJS) *.d $(PROTOCOL)/*.d
 	@echo Type ./$@ to execute the program.
 endif
  

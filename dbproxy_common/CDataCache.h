@@ -1,7 +1,7 @@
 
 /* author : limingfan
  * date : 2016.05.15
- * description : 内存数据存储
+ * description : 快速读写存储内存数据，可替换memcached内存数据库作为本地缓存数据使用
  */
  
 #ifndef _DATA_CACHE_H_
@@ -37,11 +37,9 @@ public:
 	unsigned int getMaxCount() const;
 	
 public:
-	bool error(std::string& error_message) const;
-	bool addServer(const std::string& server_name, unsigned short port);
-
 	bool get(const char* key, const unsigned int keyLen, char*& value, unsigned int& valueLen);
 	bool set(const char* key, const unsigned int keyLen, const char* value, unsigned int valueLen);
+	
 	bool remove(const char* key, const unsigned int keyLen);
 	void removeExpiredCache(unsigned int expiredInterval);
 	

@@ -1,7 +1,7 @@
 
 /* author : limingfan
  * date : 2016.05.15
- * description : 内存数据存储
+ * description : 快速读写存储内存数据，可替换memcached内存数据库作为本地缓存数据使用
  */
 
 #include <string.h>
@@ -43,16 +43,6 @@ unsigned int CDataCache::getMaxCount() const
 }
 
 
-bool CDataCache::error(std::string& error_message) const
-{
-	return true;
-}
-
-bool CDataCache::addServer(const std::string& server_name, unsigned short port)
-{
-	return true;
-}
-
 bool CDataCache::get(const char* key, const unsigned int keyLen, char*& value, unsigned int& valueLen)
 {
 	if (key == NULL || keyLen < 1) return false;
@@ -70,6 +60,7 @@ bool CDataCache::get(const char* key, const unsigned int keyLen, char*& value, u
 		it->second->time = time(NULL);   // 刷新访问时间点
 		value = it->second->data;
 		valueLen = it->second->len;
+		
 		return true;
 	}
 	
@@ -82,6 +73,7 @@ bool CDataCache::set(const char* key, const unsigned int keyLen, const char* val
 	{
 		OptErrorLog("set data to cache error, key = %p, keyLen = %u, value = %p, valueLen = %u, cache size = %u",
 		key, keyLen, value, valueLen, m_cacheSize);
+		
 	    return false;
 	}
 	
@@ -109,6 +101,7 @@ bool CDataCache::set(const char* key, const unsigned int keyLen, const char* val
 	memcpy(dataCacheContainer->data, value, valueLen);
 	dataCacheContainer->len = valueLen;
 	dataCacheContainer->time = time(NULL);  // 更新刷新时间点
+	
 	return true;
 }
 
@@ -128,6 +121,7 @@ bool CDataCache::remove(const char* key, const unsigned int keyLen)
 	{
 		m_memForDataCache.put((char*)it->second);
 		m_key2dataCache.erase(it);
+		
 		return true;
 	}
 	
