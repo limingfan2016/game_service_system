@@ -19,25 +19,24 @@ namespace GatewayProxyConfig
 
 struct CommonCfg
 {
-    unsigned int hall_login_id;
+    unsigned int game_hall_id;
 
     CommonCfg() {};
 
     CommonCfg(DOMNode* parent)
     {
-        hall_login_id = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "hall_login_id"));
+        game_hall_id = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "game_hall_id"));
     }
 
     void output() const
     {
-        std::cout << "CommonCfg : hall_login_id = " << hall_login_id << endl;
+        std::cout << "CommonCfg : game_hall_id = " << game_hall_id << endl;
     }
 };
 
 struct config : public IXmlConfigBase
 {
     CommonCfg commonCfg;
-    unordered_map<unsigned int, unsigned int> moduleId2ServiceId;
 
     static const config& getConfigValue(const char* xmlConfigFile = NULL, bool isReset = false)
     {
@@ -58,14 +57,6 @@ struct config : public IXmlConfigBase
         DomNodeArray _commonCfg;
         CXmlConfig::getNode(parent, "param", "commonCfg", _commonCfg);
         if (_commonCfg.size() > 0) commonCfg = CommonCfg(_commonCfg[0]);
-        
-        moduleId2ServiceId.clear();
-        DomNodeArray _moduleId2ServiceId;
-        CXmlConfig::getNode(parent, _moduleId2ServiceId, "moduleId2ServiceId", "value", "unsigned int");
-        for (unsigned int i = 0; i < _moduleId2ServiceId.size(); ++i)
-        {
-            moduleId2ServiceId[CXmlConfig::stringToInt(CXmlConfig::getKey(_moduleId2ServiceId[i], "key"))] = CXmlConfig::stringToInt(CXmlConfig::getValue(_moduleId2ServiceId[i], "value"));
-        }
     }
 
     void output() const
@@ -76,12 +67,6 @@ struct config : public IXmlConfigBase
         std::cout << "---------- config : commonCfg ----------" << endl;
         commonCfg.output();
         std::cout << "========== config : commonCfg ==========\n" << endl;
-        std::cout << "---------- config : moduleId2ServiceId ----------" << endl;
-        for (unordered_map<unsigned int, unsigned int>::const_iterator it = moduleId2ServiceId.begin(); it != moduleId2ServiceId.end(); ++it)
-        {
-            std::cout << "key = " << it->first << ", value = " << it->second << endl;
-        }
-        std::cout << "========== config : moduleId2ServiceId ==========\n" << endl;
     }
 };
 

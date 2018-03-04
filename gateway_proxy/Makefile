@@ -2,12 +2,12 @@ MAIN_PATH := ../../../../
 SRC_PATH := ../../../../src
 COMMON_PATH := ../../../../src/common
 PROJECT_PATH := ../../project
-PROGRAM := ../../../../run/service/gateway_proxy/gatewayProxySrv
+PROGRAM := ../../../../run/service/gateway/gatewaySrv
 
 INC_PATH := -I/usr/local/include -I$(COMMON_PATH) -I$(PROJECT_PATH) -I$(SRC_PATH)/app/frame -I$(MAIN_PATH)/import/third_party/include/
 
 LIB_PATH := -Wl,-Bstatic -L$(MAIN_PATH)/lib/ -L$(MAIN_PATH)/import/third_party/lib/
-LIBS     := $(LIB_PATH) -ldb -lhiredis -lserviceFrame -lmessageComm -lprojcommon -lconnect -lbase -pthread -lprotobuf -lxerces-c -Wl,-Bdynamic -lcurl -liconv
+LIBS     := $(LIB_PATH) -ldb -lhiredis -lserviceFrame -lmessageComm -lprojcommon -lconnect -lbase -pthread -lxerces-c -Wl,-Bdynamic -lcrypto
 
 CFLAGS = $(INC_PATH) -g -Wall -o2 -std=c++0x
 CC=g++

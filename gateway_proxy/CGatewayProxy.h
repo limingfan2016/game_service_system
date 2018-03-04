@@ -10,7 +10,6 @@
 #include "SrvFrame/IService.h"
 #include "SrvFrame/CGameModule.h"
 #include "common/CommonType.h"
-#include "common/CMonitorStat.h"
 #include "db/CRedis.h"
 #include "TypeDefine.h"
 
@@ -47,16 +46,19 @@ private:
 						         unsigned short srcProtocolId, int userFlag, unsigned int msgId, const char* srvAsyncDataFlag, unsigned int srvAsyncDataFlagLen);
 	
 public:
+	void onUpdateConfig();     // 服务配置更新
+	
 	void onClosedConnect(void* userData);   // 通知逻辑层对应的逻辑连接已被关闭
 	
 	
 private:
 	NDBOpt::CRedis m_redisDbOpt;
 	NProject::GatewayProxyServiceData m_gatewayProxySrvData;
-	NProject::CMonitorStat m_monitorStat;
 
 	IndexToConnects m_idx2Connects;
 	unsigned int m_connectIndex;
+	
+	unsigned int m_gameHallId;
 	
 	
 DISABLE_COPY_ASSIGN(CSrvMsgHandler);

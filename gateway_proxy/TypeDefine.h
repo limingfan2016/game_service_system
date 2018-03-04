@@ -17,14 +17,11 @@ using namespace std;
 namespace NPlatformService
 {
 
-static const unsigned int MaxUserDataCount = 512;
-
-
 // 协议操作返回码
 enum ProtocolReturnCode
 {
 	Opt_Failed = -1,
-	Opt_Success = 0,                       // 操作成功
+	Opt_Success = 0,
 };
 
 // 服务ID映射到连接对应的索引值
@@ -44,3 +41,4 @@ typedef unordered_map<unsigned int, ConnectUserData> IndexToConnects;
 }
 
 #endif // TYPE_DEFINE_H
+
