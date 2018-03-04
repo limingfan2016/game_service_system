@@ -147,7 +147,7 @@ MsgQueueList* CNetMsgHandler::getNetMsgQueue(uuid_type& connId)
 	MsgHandlerList* msgHandler = NULL;
 	for (unsigned int count = 0; count < m_cfg->NetNodeCount; ++count)
 	{
-		m_curNetHandlerIdx = ++m_curNetHandlerIdx % m_cfg->NetNodeCount;  // 循环遍历所有正常的节点，直到回到起点
+		m_curNetHandlerIdx = (m_curNetHandlerIdx + 1) % m_cfg->NetNodeCount;  // 循环遍历所有正常的节点，直到回到起点
 		msgHandler = m_netMsgHandlers[m_curNetHandlerIdx];
 		if (msgHandler != NULL)
 		{
@@ -331,7 +331,7 @@ ReturnValue CNetMsgHandler::doCreateConnect(Connect* conn, const char* peerIp, c
 					if (m_netMsgHandlers[i] == NULL)  // 找到空闲位置
 					{
 						m_netMsgHandlers[i] = netMsgHandler;
-						cb = (void*)(i + 1);  // 保证指针值不为0
+						cb = (void*)(unsigned long)(i + 1);  // 保证指针值不为0
 						break;
 					}
 				}

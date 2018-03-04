@@ -50,7 +50,7 @@ public:
     // 获取代理信息
 	uuid_type getProxyId(ConnectProxy* connProxy);
 	ConnectProxy* getProxy(const uuid_type id);
-	void closeProxy(const uuid_type id);      // 服务关闭用户连接时调用
+	void closeProxy(const uuid_type id, int cbFlag = 0);      // 服务关闭用户连接时调用
 	
 	void* resetProxyUserData(ConnectProxy* conn, void* userData = NULL);
     void* getProxyUserData(ConnectProxy* conn);
@@ -70,15 +70,12 @@ public:
     virtual ConnectProxy* getConnectProxy(const string& connId);
 	
 	void addConnectProxy(const string& connId, ConnectProxy* conn, void* userData = NULL);
-	bool removeConnectProxy(const string& connId, bool doClose = true);
+	bool removeConnectProxy(const string& connId, int cbFlag = 0, bool doClose = true);
 	bool haveConnectProxy(const string& connId);
-	bool closeConnectProxy(const string& connId);
-	void closeConnectProxy(ConnectProxy* conn);
+	bool closeConnectProxy(const string& connId, int cbFlag = 0);
+	void closeConnectProxy(ConnectProxy* conn, int cbFlag = 0);
 	const IDToConnectProxys& getConnectProxy();
 	bool resetProxyUserData(const string& connId, void* userData = NULL);
-
-public:
-	virtual const char* canToDoOperation(const int opt, const char* info = "");  // 是否可以执行该操作
 
 private:
     // 收到连接代理的数据
@@ -87,7 +84,7 @@ private:
 	
 	virtual void onRegister(const char* srvName, const unsigned int srvId, unsigned short moduleId);
 	
-	virtual void onHandleMessage(unsigned short protocolId, ConnectProxy* conn);
+	virtual bool onPreHandleMessage(const char* msgData, const unsigned int msgLen, const ConnectProxyContext& connProxyContext);
 	
 
 private:

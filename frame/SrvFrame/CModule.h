@@ -31,7 +31,9 @@ struct MsgHandler
 	ProtocolHandler handler;
 };
 
-typedef std::unordered_map<unsigned short, MsgHandler> ProtocolIdToHandler;
+typedef std::unordered_map<unsigned int, MsgHandler> ProtocolIdToHandler;
+
+typedef std::unordered_map<unsigned int, ProtocolIdToHandler> ServiceTypeToProtocolHandler;
 
 
 // 定时器消息处理者函数
@@ -103,7 +105,7 @@ public:
 	const Context& getContext();
 	
 	// 注册处理协议的函数
-    int registerProtocol(ServiceType srcSrvType, unsigned short protocolId, ProtocolHandler handler, CHandler* instance = NULL);
+    int registerProtocol(unsigned int srcSrvType, unsigned short protocolId, ProtocolHandler handler, CHandler* instance = NULL);
 	
 	// 向目标服务发送请求消息
 	// handleProtocolId : 应答消息的处理协议ID，如果该消息存在应答的话
@@ -158,7 +160,7 @@ private:
 
 
 protected:
-    ProtocolIdToHandler m_protocolHanders[MaxServiceType];
+    ServiceTypeToProtocolHandler m_protocolHanders;
 	
 	CService* m_service;
 	CConnectMgr* m_connectMgr;

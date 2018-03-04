@@ -85,8 +85,8 @@ public:
 	
 public:
     // 主动关闭、停止连接代理
-	void closeProxy(ConnectProxy* conn, bool isActive = true);                  // 服务关闭用户连接时调用
-	void closeProxy(const uuid_type id, bool isActive = true);                  // 服务关闭用户连接时调用
+	void closeProxy(ConnectProxy* conn, bool isActive, int cbFlag = 0);                  // 服务关闭用户连接时调用
+	void closeProxy(const uuid_type id, bool isActive, int cbFlag = 0);                  // 服务关闭用户连接时调用
 
 	uuid_type getProxyId(ConnectProxy* connProxy);
 	ConnectProxy* getProxy(const uuid_type id);
@@ -98,8 +98,11 @@ public:
     const char* getName();
 	unsigned int getId();
 	unsigned int getServiceId(const char* serviceName);
+	
 	int registerModule(unsigned short moduleId, CModule* pInstance);
-	void setServiceType(ServiceType srvType);
+	int registerNetModule(CNetDataHandler* pInstance);
+	
+	void setServiceType(unsigned int srvType);
     void setConnectClient();
 	
 public:	

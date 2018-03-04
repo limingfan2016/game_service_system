@@ -14,6 +14,8 @@ namespace NFrame
 {
 	enum ConnectProxyOperation
 	{
+        ProxyException = -1,            // 代理服务异常
+        
 		ActiveClosed = 1,               // 服务端主动要求关闭代理的连接
 		PassiveClosed = 2,              // 代理的连接已经被动关闭了
 		StopProxy = 3,                  // 服务已经停止了，代理该服务的所有连接都将被关闭

@@ -55,8 +55,10 @@ public:
 	void addConnect(const string& connId, Connect* conn, void* userData = NULL);
 	bool removeConnect(const string& connId, bool doClose = true);
 	bool haveConnect(const string& connId);
+	
 	void closeConnect(const string& connId);
 	void closeConnect(Connect* conn);
+	
     Connect* getConnect(const string& connId);
 	const IDToConnects& getConnect();
 	void* getUserData(Connect* conn);
@@ -64,11 +66,13 @@ public:
 	// 提供 连接代理对象 的保存、关闭、增删查等（应用上层）操作
 public:
 	void addConnectProxy(const string& connId, ConnectProxy* conn, void* userData = NULL);
-	bool removeConnectProxy(const string& connId, bool doClose = true);
+	bool removeConnectProxy(const string& connId, bool doClose = true, int cbFlag = 0);
 	bool haveConnectProxy(const string& connId);
-	bool closeConnectProxy(const string& connId);
-	void closeConnectProxy(ConnectProxy* conn);
+	
+	bool closeConnectProxy(const string& connId, int cbFlag = 0);
+	void closeConnectProxy(ConnectProxy* conn, int cbFlag = 0);
 	void clearConnectProxy();
+	
     ConnectProxy* getConnectProxy(const string& connId);
 	const IDToConnectProxys& getConnectProxy();
 	void* getProxyUserData(ConnectProxy* conn);
@@ -81,6 +85,7 @@ public:
 	ConnectProxy* removeProxy(FlagToProxys::iterator it);
 	void clearProxy();
 	bool haveProxy(uuid_type flag, FlagToProxys::iterator& it);
+	
     ConnectProxy* getProxy(uuid_type flag);
 	const FlagToProxys& getProxy();
 	

@@ -76,8 +76,7 @@ int CModule::onServiceMessage(const char* msgData, const unsigned int msgLen, co
 							  unsigned short dstProtocolId, unsigned int srcSrvId, unsigned short srcSrvType,
 							  unsigned short srcModuleId, unsigned short srcProtocolId, int userFlag, unsigned int msgId, const char* srvAsyncDataFlag, unsigned int srvAsyncDataFlagLen)
 {
-	// if (dstProtocolId >= MaxProtocolIDCount || srcSrvType >= MaxServiceType || userDataLen > MaxUserDataLen || srcProtocolId >= MaxProtocolIDCount)
-	if (srcSrvType >= MaxServiceType || userDataLen > MaxUserDataLen)
+	if (userDataLen > MaxUserDataLen)
 	{
 		ReleaseErrorLog("receive msg error, srcServiceId = %d, srcServiceType = %d, dstProtocolId = %d, userDataLen = %d, srcProtocolId = %d",
 		                srcSrvId, srcSrvType, dstProtocolId, userDataLen, srcProtocolId);
@@ -92,7 +91,7 @@ int CModule::onServiceMessage(const char* msgData, const unsigned int msgLen, co
 		handlerIt = protocolHandler->find(dstProtocolId);
 		if (handlerIt == protocolHandler->end() || handlerIt->second.handler == NULL)
 		{
-			protocolHandler = &m_protocolHanders[CommonSrv];  // 默认取公共协议
+			protocolHandler = &m_protocolHanders[CommonServiceType];  // 默认取公共协议
 			handlerIt = protocolHandler->find(dstProtocolId);
 		}
 	}
@@ -174,9 +173,9 @@ const Context& CModule::getContext()
 }
 
 // 注册处理协议的函数
-int CModule::registerProtocol(ServiceType srcSrvType, unsigned short protocolId, ProtocolHandler handler, CHandler* instance)
+int CModule::registerProtocol(unsigned int srcSrvType, unsigned short protocolId, ProtocolHandler handler, CHandler* instance)
 {
-	if (srcSrvType >= MaxServiceType || protocolId == MaxProtocolIDCount || handler == NULL) return InvalidParam;
+	if (protocolId == MaxProtocolIDCount || handler == NULL) return InvalidParam;
 	
 	if (instance == NULL) instance = this;
 	MsgHandler* msgHandler = NULL;

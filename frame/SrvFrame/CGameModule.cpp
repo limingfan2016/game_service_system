@@ -19,7 +19,7 @@ namespace NFrame
 CGameModule::CGameModule()
 {
 	memset(&m_netClientContext, 0, sizeof(m_netClientContext));
-	m_clientProtocolHanders = &m_protocolHanders[OutsideClientSrv];
+	m_clientProtocolHanders = &m_protocolHanders[OutsideClientServiceType];
 }
 
 CGameModule::~CGameModule()

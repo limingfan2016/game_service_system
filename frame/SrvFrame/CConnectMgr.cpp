@@ -94,14 +94,14 @@ void CConnectMgr::addConnectProxy(const string& connId, ConnectProxy* conn, void
 	m_id2ConnectProxys[connId] = conn;
 }
 
-bool CConnectMgr::removeConnectProxy(const string& connId, bool doClose)
+bool CConnectMgr::removeConnectProxy(const string& connId, bool doClose, int cbFlag)
 {
 	IDToConnectProxys::iterator it = m_id2ConnectProxys.find(connId);
     if (it != m_id2ConnectProxys.end())
 	{
 		ConnectProxy* conn = it->second;
 		m_id2ConnectProxys.erase(it);      // 先删除，否则如果回调函数closeProxy里也执行同样的删除操作会导致it失效错误
-		if (doClose) getService().closeProxy(conn);
+		if (doClose) getService().closeProxy(conn, true, cbFlag);
 		return true;
 	}
 	
@@ -113,14 +113,14 @@ bool CConnectMgr::haveConnectProxy(const string& connId)
     return (m_id2ConnectProxys.find(connId) != m_id2ConnectProxys.end());
 }
 
-bool CConnectMgr::closeConnectProxy(const string& connId)
+bool CConnectMgr::closeConnectProxy(const string& connId, int cbFlag)
 {
-	return removeConnectProxy(connId);
+	return removeConnectProxy(connId, true, cbFlag);
 }
 
-void CConnectMgr::closeConnectProxy(ConnectProxy* conn)
+void CConnectMgr::closeConnectProxy(ConnectProxy* conn, int cbFlag)
 {
-	if (conn != NULL) getService().closeProxy(conn);
+	if (conn != NULL) getService().closeProxy(conn, true, cbFlag);
 }
 
 void CConnectMgr::clearConnectProxy()

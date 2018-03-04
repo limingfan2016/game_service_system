@@ -49,8 +49,8 @@ char* CLocalAsyncData::createData()
 	if (m_srvIdLen < 1) generateDataId();  // 只可以在此时调用，否则 m_module->getSrvId() 在初始化时调用将返回0导致错误，服务还没有完全初始化完毕
 	
 	if (m_module->getContext().srvAsyncDataFlagLen > 0 && strstr(m_module->getContext().srvAsyncDataFlag, m_strSrvId) != NULL) return NULL;  // 已经存在了
-	
-	m_index = ++m_index % MaxIdFlagIndex;
+
+	m_index = (m_index + 1) % MaxIdFlagIndex;
 	
 	// 异步数据索引，服务ID&索引值
 	char flagData[MaxLocalAsyncDataFlagLen] = {0};
@@ -147,8 +147,7 @@ void CLocalAsyncData::generateDataId()
 	if (m_srvIdLen < 1)
 	{
 		static unsigned int s_instanceId = 0;  // 实例ID值
-		++s_instanceId;
-		s_instanceId %= MaxIdFlagIndex;
+		s_instanceId = (s_instanceId + 1) % MaxIdFlagIndex;
 		m_srvIdLen = snprintf(m_strSrvId, SrvIdLen - 1, "%u%u", m_module->getSrvId(), s_instanceId);
 	}
 }

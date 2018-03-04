@@ -15,13 +15,14 @@ namespace NFrame
 {
 
 class CModule;
+class CNetDataHandler;
 
 
 // 服务基础能力框架
 class IService
 {
 public:
-	IService(ServiceType srvType, bool isConnectClient = false);
+	IService(unsigned int srvType, bool isConnectClient = false);
 	virtual ~IService();
 
 public:
@@ -31,6 +32,9 @@ public:
 	
     // 注册本服务的各模块实例对象
     int registerModule(unsigned short moduleId, CModule* pInstance);
+	
+	// 注册纯网络数据处理模块实例对象
+	int registerNetModule(CNetDataHandler* pInstance);
 
     // 停止退出服务
     void stopService();
@@ -44,7 +48,8 @@ public:
 	virtual int onHandle();                                                  // 服务自己的处理逻辑
 	
 public:
-	virtual void onClosedConnect(void* userData);   // 通知逻辑层对应的逻辑连接已被关闭
+	virtual void onClosedConnect(void* userData);                            // 通知逻辑层对应的连接已被关闭
+	virtual void onCloseConnectProxy(void* userData, int cbFlag);            // 通知逻辑层对应的逻辑连接代理已被关闭
 	
 
 DISABLE_COPY_ASSIGN(IService);

@@ -19,23 +19,13 @@ namespace NFrame
 CLogicHandler::CLogicHandler()
 {
 	memset(&m_connectProxyContext, 0, sizeof(m_connectProxyContext));
-	m_proxyProtocolHanders = &m_protocolHanders[OutsideClientSrv];
+	m_proxyProtocolHanders = &m_protocolHanders[OutsideClientServiceType];
 }
 
 CLogicHandler::~CLogicHandler()
 {
 	memset(&m_connectProxyContext, 0, sizeof(m_connectProxyContext));
 	m_proxyProtocolHanders = NULL;
-}
-
-// 是否可以执行该操作
-const char* CLogicHandler::canToDoOperation(const int opt, const char* info)
-{
-	return NULL;
-}
-
-void CLogicHandler::onHandleMessage(unsigned short protocolId, ConnectProxy* conn)
-{
 }
 
 // 收到网络客户端的数据
@@ -62,17 +52,23 @@ int CLogicHandler::onProxyMessage(const char* msgData, const unsigned int msgLen
 	m_connectProxyContext.msgId = msgId;
 	m_connectProxyContext.conn = conn;
 	
-	onHandleMessage(protocolId, conn);
-	
-	// 业务逻辑处理消息
-	m_msgType = MessageType::ConnectProxyMsg;
-	(handlerIt->second.instance->*(handlerIt->second.handler))(msgData, msgLen, serviceId, moduleId, protocolId);
+	if (onPreHandleMessage(msgData, msgLen, m_connectProxyContext))
+	{
+		// 业务逻辑处理消息
+		m_msgType = MessageType::ConnectProxyMsg;
+		(handlerIt->second.instance->*(handlerIt->second.handler))(msgData, msgLen, serviceId, moduleId, protocolId);
+	}
 
 	m_connectProxyContext.protocolId = (unsigned short)-1;
 	m_connectProxyContext.msgId = (unsigned int)-1;
 	m_connectProxyContext.conn = NULL;
 	
 	return Success;
+}
+
+bool CLogicHandler::onPreHandleMessage(const char* msgData, const unsigned int msgLen, const ConnectProxyContext& connProxyContext)
+{
+	return true;
 }
 
 
@@ -121,9 +117,9 @@ ConnectProxy* CLogicHandler::getProxy(const uuid_type id)
 }
 
 // 服务关闭用户连接时调用
-void CLogicHandler::closeProxy(const uuid_type id)
+void CLogicHandler::closeProxy(const uuid_type id, int cbFlag)
 {
-	m_service->closeProxy(id);
+	m_service->closeProxy(id, true, cbFlag);
 }
 
 void* CLogicHandler::resetProxyUserData(ConnectProxy* conn, void* userData)
@@ -191,9 +187,9 @@ bool CLogicHandler::resetProxyUserData(const string& connId, void* userData)
 	return (conn != NULL);
 }
 
-bool CLogicHandler::removeConnectProxy(const string& connId, bool doClose)
+bool CLogicHandler::removeConnectProxy(const string& connId, int cbFlag, bool doClose)
 {
-	return m_connectMgr->removeConnectProxy(connId, doClose);
+	return m_connectMgr->removeConnectProxy(connId, doClose, cbFlag);
 }
 
 bool CLogicHandler::haveConnectProxy(const string& connId)
@@ -201,14 +197,14 @@ bool CLogicHandler::haveConnectProxy(const string& connId)
 	return m_connectMgr->haveConnectProxy(connId);
 }
 
-bool CLogicHandler::closeConnectProxy(const string& connId)
+bool CLogicHandler::closeConnectProxy(const string& connId, int cbFlag)
 {
-	return m_connectMgr->closeConnectProxy(connId);
+	return m_connectMgr->closeConnectProxy(connId, cbFlag);
 }
 
-void CLogicHandler::closeConnectProxy(ConnectProxy* conn)
+void CLogicHandler::closeConnectProxy(ConnectProxy* conn, int cbFlag)
 {
-	m_connectMgr->closeConnectProxy(conn);
+	m_connectMgr->closeConnectProxy(conn, cbFlag);
 }
 
 void CLogicHandler::onRegister(const char* srvName, const unsigned int srvId, unsigned short moduleId)

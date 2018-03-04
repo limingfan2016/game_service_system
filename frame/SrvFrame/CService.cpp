@@ -344,14 +344,44 @@ void CService::run()
 	for (unsigned int moduleId = 0; moduleId < MaxModuleIDCount; ++moduleId)
 	{
 		CModule* handleModule = m_moduleInstance[moduleId];
-	    if (handleModule != NULL) handleModule->doLoad(moduleId, m_srvName, m_srvId, &m_connectMgr, m_srvMsgComm->getCfg());      // 模块初始化工作
+	    if (handleModule != NULL)
+		{
+			// 存在同一个模块实例注册多个ID的场景（例如：内部服务消息处理和纯网络消息处理使用同一个模块实例）
+			// 因此必须保证同一个实例回调函数只会调用一次
+			unsigned int idx = 0;
+			while (idx < moduleId)
+			{
+				if (m_moduleInstance[idx] == handleModule) break;
+				
+				++idx;
+			}
+			
+			if (idx < moduleId) continue;  // 相同的实例对象，之前已经调用过doLoad了，不再回调
+			
+			handleModule->doLoad(moduleId, m_srvName, m_srvId, &m_connectMgr, m_srvMsgComm->getCfg());      // 模块初始化工作
+        }
 	}
 	
 	// 5）回调运行服务模块，各模块之间可在此做依赖关系
 	for (unsigned int moduleId = 0; moduleId < MaxModuleIDCount; ++moduleId)
 	{
 		CModule* handleModule = m_moduleInstance[moduleId];
-	    if (handleModule != NULL) handleModule->onRun(m_srvName, m_srvId, moduleId);       // 模块开始运行
+	    if (handleModule != NULL)
+		{
+			// 存在同一个模块实例注册多个ID的场景（例如：内部服务消息处理和纯网络消息处理使用同一个模块实例）
+			// 因此必须保证同一个实例回调函数只会调用一次
+			unsigned int idx = 0;
+			while (idx < moduleId)
+			{
+				if (m_moduleInstance[idx] == handleModule) break;
+				
+				++idx;
+			}
+			
+			if (idx < moduleId) continue;  // 相同的实例对象，之前已经调用过onRun了，不再回调
+			
+			handleModule->onRun(m_srvName, m_srvId, moduleId);       // 模块开始运行
+        }
 	}
 	
 	CProcess::installSignal(SignalNumber::StopProcess, NFrame::ExitService);     // 服务正常退出信号
@@ -443,7 +473,22 @@ void CService::run()
 	for (unsigned int moduleId = 0; moduleId < MaxModuleIDCount; ++moduleId)
 	{
 		CModule* handleModule = m_moduleInstance[moduleId];
-	    if (handleModule != NULL) handleModule->onUnLoad(m_srvName, m_srvId, moduleId);      // 模块去初始化工作
+	    if (handleModule != NULL)
+		{
+			// 存在同一个模块实例注册多个ID的场景（例如：内部服务消息处理和纯网络消息处理使用同一个模块实例）
+			// 因此必须保证同一个实例回调函数只会调用一次
+			unsigned int idx = 0;
+			while (idx < moduleId)
+			{
+				if (m_moduleInstance[idx] == handleModule) break;
+				
+				++idx;
+			}
+			
+			if (idx < moduleId) continue;  // 相同的实例对象，之前已经调用过onUnLoad了，不再回调
+			
+			handleModule->onUnLoad(m_srvName, m_srvId, moduleId);      // 模块去初始化工作
+        }
 	}
 
     // 8）退出停止服务
@@ -558,11 +603,11 @@ void CService::killTimer(unsigned int timerId)
 
 void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int msgLen)
 {
-	unsigned short moduleId = ntohs(msgHeader->dstService.moduleId);
-	unsigned int srcServiceId = ntohl(msgHeader->srcService.serviceId);
-	unsigned short srcSrvType = ntohs(msgHeader->srcService.serviceType);
-	bool isProxyMsg = (srcSrvType == ServiceType::GatewayProxySrv);
-	if (moduleId >= MaxModuleIDCount || srcSrvType >= MaxServiceType)
+	const unsigned short moduleId = ntohs(msgHeader->dstService.moduleId);
+	const unsigned int srcServiceId = ntohl(msgHeader->srcService.serviceId);
+	const unsigned short srcSrvType = ntohs(msgHeader->srcService.serviceType);
+	const bool isProxyMsg = (srcSrvType == GatewayServiceType);
+	if (moduleId >= MaxModuleIDCount)
 	{
 		if (isProxyMsg) ++srvStatData.errorClientMsgs;
 		else ++srvStatData.errorServiceMsgs;
@@ -600,7 +645,7 @@ void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int ms
 			// 代理连接发往本服务的第一条消息，但索引对应的连接数据已经存在，说明代理服务异常退出，而没有通知到本服务之前的代理连接已经被异常关闭的情况
 			// 此情况下先通知服务连接代理已经被关闭了
 			ReleaseErrorLog("receive proxy first message but already have repeat proxy id = %d, flag = %d", srcServiceId, userFlag);
-			closeProxy(conn, false);
+			closeProxy(conn, false, ConnectProxyOperation::ProxyException);
 			conn = NULL;  // 需要重新创建连接代理数据
 		}
 		
@@ -635,7 +680,7 @@ void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int ms
 	    srvStatData.recvCltMsgSize += msgLen;
 		
 		// 代理的连接被动关闭了
-		if (srvProtocolId == ConnectProxyOperation::PassiveClosed) return closeProxy(conn, false);
+		if (srvProtocolId == ConnectProxyOperation::PassiveClosed) return closeProxy(conn, false, ConnectProxyOperation::PassiveClosed);
 
 		if (handleModule->onProxyMessage(userData + userDataLen, ntohl(msgHeader->msgLen), ntohl(msgHeader->msgId), 
 	                                     srcServiceId, ntohs(msgHeader->srcService.moduleId),
@@ -698,7 +743,7 @@ void CService::handleClientMessage(const char* data, Connect* conn, unsigned int
 	++srvStatData.recvClientMsgs;
 	srvStatData.recvCltMsgSize += msgLen;
 
-	CModule* handleModule = m_moduleInstance[0];
+	CModule* handleModule = m_moduleInstance[NetDataHandleModuleID];
 	if (handleModule == NULL)
 	{
 		++srvStatData.errorClientMsgs;
@@ -968,17 +1013,17 @@ int CService::sendMsgToProxy(const char* msgData, const unsigned int msgLen, uns
 	return rc;
 }
 
-void CService::closeProxy(ConnectProxy* conn, bool isActive)
+void CService::closeProxy(ConnectProxy* conn, bool isActive, int cbFlag)
 {
 	if (conn == NULL) return;
 	
 	ProxyID proxyId;
 	proxyId.proxyFlag.flag = conn->proxyFlag;
 	proxyId.proxyFlag.serviceId = conn->proxyId;
-	closeProxy(proxyId.id, isActive);
+	closeProxy(proxyId.id, isActive, cbFlag);
 }
 
-void CService::closeProxy(const uuid_type id, bool isActive)
+void CService::closeProxy(const uuid_type id, bool isActive, int cbFlag)
 {
 	// 1、先查找是否存在对应的代理连接
 	// 已经被释放过了的，不能重复释放，
@@ -989,7 +1034,7 @@ void CService::closeProxy(const uuid_type id, bool isActive)
     // 2、接着通知服务连接关闭了
 	ConnectProxy* conn = connProxyIt->second;
 	void* userCb = m_connectMgr.getProxyUserData(conn);
-	if (userCb != NULL) serviceInstance->onClosedConnect(userCb);
+	if (userCb != NULL) serviceInstance->onCloseConnectProxy(userCb, cbFlag);
 					
 	// 3、再发消息给网关代理关闭该用户对应的网络连接
 	// 主动关闭则通知连接代理关闭对应的连接
@@ -1001,7 +1046,7 @@ void CService::closeProxy(const uuid_type id, bool isActive)
 
 	// 4、最后才回收资源
 	// 回收资源
-	m_connectMgr.removeProxy(connProxyIt);  // 最后才可以执行remove操作，存在应用上层在onClosedConnect回调里发消息的场景
+	m_connectMgr.removeProxy(connProxyIt);  // 最后才可以执行remove操作，存在应用上层在onCloseConnectProxy回调里发消息的场景
     m_connectMgr.destroyProxy(conn);
 }
 
@@ -1060,13 +1105,21 @@ void CService::cleanUpProxy(const unsigned int proxyId[], const unsigned int len
 // 注册本服务的各模块实例对象
 int CService::registerModule(unsigned short moduleId, CModule* pInstance)
 {
-	if (moduleId >= MaxModuleIDCount || pInstance == NULL) return InvalidParam;
+	if (moduleId >= NetDataHandleModuleID || pInstance == NULL) return InvalidParam;
 	
 	m_moduleInstance[moduleId] = pInstance;
 	return Success;
 }
 
-void CService::setServiceType(ServiceType srvType)
+int CService::registerNetModule(CNetDataHandler* pInstance)
+{
+	if (pInstance == NULL) return InvalidParam;
+	
+	m_moduleInstance[NetDataHandleModuleID] = pInstance;
+	return Success;
+}
+
+void CService::setServiceType(unsigned int srvType)
 {
 	m_srvType = srvType;
 }
@@ -1192,6 +1245,12 @@ int IService::registerModule(unsigned short moduleId, CModule* pInstance)
 	return getService().registerModule(moduleId, pInstance);
 }
 
+// 注册纯网络数据处理模块实例对象
+int IService::registerNetModule(CNetDataHandler* pInstance)
+{
+	return getService().registerNetModule(pInstance);
+}
+
 void IService::stopService()
 {
 	return getService().stop();
@@ -1219,12 +1278,17 @@ int IService::onHandle()
 	return NoLogicHandle;
 }
 
-// 通知逻辑层对应的逻辑连接已被关闭
+// 通知逻辑层对应的连接已被关闭
 void IService::onClosedConnect(void* userData)
 {
 }
 
-IService::IService(ServiceType srvType, bool isConnectClient)
+// 通知逻辑层对应的逻辑连接代理已被关闭
+void IService::onCloseConnectProxy(void* userData, int cbFlag)
+{
+}
+
+IService::IService(unsigned int srvType, bool isConnectClient)
 {
 	getService().setServiceType(srvType);
 	if (isConnectClient) getService().setConnectClient();
