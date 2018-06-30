@@ -46,6 +46,8 @@ struct ServiceConfigFile
     string service_xml_cfg;
     string mall_xml_cfg;
     string cattles_base_cfg;
+    string golden_fraud_base_cfg;
+    string fight_landlord_base_cfg;
     string service_cfg_file;
 
     ServiceConfigFile() {};
@@ -56,6 +58,8 @@ struct ServiceConfigFile
         service_xml_cfg = CXmlConfig::getValue(parent, "service_xml_cfg");
         mall_xml_cfg = CXmlConfig::getValue(parent, "mall_xml_cfg");
         cattles_base_cfg = CXmlConfig::getValue(parent, "cattles_base_cfg");
+        golden_fraud_base_cfg = CXmlConfig::getValue(parent, "golden_fraud_base_cfg");
+        fight_landlord_base_cfg = CXmlConfig::getValue(parent, "fight_landlord_base_cfg");
         service_cfg_file = CXmlConfig::getValue(parent, "service_cfg_file");
     }
 
@@ -65,6 +69,8 @@ struct ServiceConfigFile
         std::cout << "ServiceConfigFile : service_xml_cfg = " << service_xml_cfg << endl;
         std::cout << "ServiceConfigFile : mall_xml_cfg = " << mall_xml_cfg << endl;
         std::cout << "ServiceConfigFile : cattles_base_cfg = " << cattles_base_cfg << endl;
+        std::cout << "ServiceConfigFile : golden_fraud_base_cfg = " << golden_fraud_base_cfg << endl;
+        std::cout << "ServiceConfigFile : fight_landlord_base_cfg = " << fight_landlord_base_cfg << endl;
         std::cout << "ServiceConfigFile : service_cfg_file = " << service_cfg_file << endl;
     }
 };

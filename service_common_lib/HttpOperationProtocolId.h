@@ -24,6 +24,10 @@ enum EHttpOperationProtocolId
     // 给用户手机发送验证码（绑定手机号码功能）
 	HTTPOPT_CHECK_PHONE_NUMBER_REQ = 7,
 	HTTPOPT_CHECK_PHONE_NUMBER_RSP = 8,
+	
+	// 发送手机通知短信息
+	HTTPOPT_SEND_MOBILE_PHONE_MESSAGE_REQ = 9,
+	HTTPOPT_SEND_MOBILE_PHONE_MESSAGE_RSP = 10,
 };
 
 

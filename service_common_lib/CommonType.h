@@ -83,30 +83,6 @@ struct GameServiceData					// 此数据内容对应的二级key为 用户ID
 #pragma pack()
 
 
-/*
-// 道具变更记录信息
-struct RecordItem
-{
-	unsigned int type;
-	int count;
-	
-	RecordItem() {};
-	RecordItem(unsigned int _type, int _count) : type(_type), count(_count) {};
-};
-typedef vector<RecordItem> RecordItemVector;
-
-// 道具变更记录信息(多人)
-struct MoreUserRecordItem
-{
-	string src_username;          // 源用户
-	string dst_username;          // 目标用户
-	string remark;                // 游戏记录信息
-	RecordItemVector items;       // 变更的道具
-};
-typedef vector<MoreUserRecordItem> MoreUserRecordItemVector;
-*/
-
-
 // 从redis获取到的大厅逻辑数据，一级key为"HallLogicData"，二级key为用户ID
 static const char* HallLogicDataKey = "HallLogicData";
 static const int HallLogicDataKeyLen = strlen(HallLogicDataKey);

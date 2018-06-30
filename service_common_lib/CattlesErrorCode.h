@@ -36,6 +36,15 @@ enum ECattlesErrorCode
 	CattlesOnPlayCanNotChangeRoom = 11023,     // 玩家游戏中，不可以更换房间
 	CattlesOnPlayCanNotLeaveRoom = 11024,      // 玩家游戏中，不可以离开房间
     CattlesInvalidChessHallId = 11025,         // 无效的棋牌室ID
+	
+	CattlesRoomCardInsufficient = 11026,       // 房卡数量不足
+	CattlesNotRoomCreator = 11027,             // 不是房间的创建者
+	CattlesNotAutoStartRoom = 11028,           // 不是自动开桌的房间
+	CattlesNotManualStartRoom = 11029,         // 不是手动开桌的房间
+	CattlesHasSitDownPlayer = 11030,           // 存在在座未准备的玩家
+	CattlesStartPlayerInsufficient = 11031,    // 开桌玩家人数不足
+	
+	CattlesAskDismissRoomFrequently = 11032,   // 玩家频繁请求解散房间
 };
 
 

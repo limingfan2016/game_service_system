@@ -21,27 +21,6 @@ using namespace std;
 namespace NProject
 {
 
-// 服务内部公共的消息协议ID，范围[0 --- 1000]
-enum EServiceCommonProtocolId
-{
-	// 关闭重复的连接，用户重复登录了
-	// 所有服务包括大厅和游戏服务收到该消息则对应的用户必须退出服务
-	SERVICE_CLOSE_REPEATE_CONNECT_NOTIFY = 1,
-	
-	// 管理员给玩家赠送物品通知大厅&游戏服务
-	SERVICE_MANAGER_GIVE_GOODS_NOTIFY = 2,
-	
-	// 游戏服务系统公告消息通知
-	SERVICE_GAME_MSG_NOTICE_NOTIFY = 3,
-	
-	// 玩家收到其他游戏玩家邀请一起游戏通知
-	SERVICE_PLAYER_INVITATION_NOTIFY = 4,
-	
-	// 玩家收到拒绝邀请通知
-	SERVICE_REFUSE_INVITATION_NOTIFY = 5,
-};
-
-
 // 所有游戏与客户端间的固定消息协议ID，范围[0 --- 1000]
 enum EClientGameCommonProtocolId
 {
@@ -113,6 +92,71 @@ enum EClientGameCommonProtocolId
 	COMM_PLAYER_CHANGE_ROOM_REQ = 27,
 	COMM_PLAYER_CHANGE_ROOM_RSP = 28,
 	COMM_PLAYER_CHANGE_ROOM_NOTIFY = 29,
+	
+	// 通知客户端开始游戏
+	COMM_START_GAME_NOTIFY = 30,
+	
+	// 玩家手动开始游戏
+	COMM_PLAYER_START_GAME_REQ = 31,
+	COMM_PLAYER_START_GAME_RSP = 32,
+	
+	// 玩家解散房间
+	COMM_PLAYER_DISMISS_ROOM_REQ = 33,
+	COMM_PLAYER_DISMISS_ROOM_RSP = 34,
+	COMM_PLAYER_DISMISS_ROOM_ASK_NOTIFY = 35,
+	COMM_PLAYER_DISMISS_ROOM_ANSWER_NOTIFY = 36,
+	COMM_PLAYER_CONFIRM_DISMISS_ROOM_NOTIFY = 37,
+	COMM_PLAYER_CANCEL_DISMISS_ROOM_NOTIFY = 38,
+	
+	// 准备下一局游戏通知（房卡场）
+	COMM_PREPARE_GAME_NOTIFY = 39,
+	
+	// 通知客户端结束游戏
+	COMM_FINISH_GAME_NOTIFY = 40,
+	
+	// 倒计时通知
+	COMM_TIME_OUT_SECONDS_NOTIFY = 41,
+	
+	// 游戏准备按钮状态通知
+	COMM_PREPARE_STATUS_NOTIFY = 42,
+	
+	// 通知玩家可以手动开始游戏（房卡手动开桌）
+	COMM_MANUAL_START_GAME_NOTIFY = 43,
+	
+	// 房卡大结算通知
+	COMM_ROOM_TOTAL_SETTLEMENT_NOTIFY = 44,
+};
+
+
+// 服务内部公共的消息协议ID，范围[0 --- 1000]
+enum EServiceCommonProtocolId
+{
+	// 关闭重复的连接，用户重复登录了
+	// 所有服务包括大厅和游戏服务收到该消息则对应的用户必须退出服务
+	SERVICE_CLOSE_REPEATE_CONNECT_NOTIFY = 1,
+	
+	// 管理员给玩家赠送物品通知大厅&游戏服务
+	SERVICE_MANAGER_GIVE_GOODS_NOTIFY = 2,
+	
+	// 游戏服务系统公告消息通知
+	SERVICE_GAME_MSG_NOTICE_NOTIFY = 3,
+	
+	// 玩家收到其他游戏玩家邀请一起游戏通知
+	SERVICE_PLAYER_INVITATION_NOTIFY = 4,
+	
+	// 玩家收到拒绝邀请通知
+	SERVICE_REFUSE_INVITATION_NOTIFY = 5,
+};
+
+
+// 服务内部公共的自定义应答协议ID值
+// 其值必须大于 MaxProtocolIDCount = 8192
+enum EServiceCommonReplyProtocolId
+{
+	SERVICE_COMMON_MIN_PROTOCOL_ID = 10000,                  // 服务自定义应答协议最小ID值
+
+	SERVICE_COMMON_GET_USER_INFO_FOR_ENTER_ROOM = 10001,     // 用户进入房间获取个人信息
+	SERVICE_COMMON_GET_ROOM_INFO_FOR_ENTER_ROOM = 10002,     // 用户进入房间获取房间信息
 };
 
 
@@ -159,6 +203,9 @@ enum EGameGoodsType
 	EMallFlower = 104,        // 鲜花
 	EMallSoap = 105,          // 肥皂
 	EMaxMallGoodsType,        // 最大商城物品类型
+	
+	// 其他类型
+	EWinLoseResult = 1001,    // 输赢结果
 };
 
 // 服务操作类型
@@ -195,11 +242,12 @@ enum ServiceType
 	
     // 游戏服务类型
 	CattlesGame = 11,                                       // 牛牛游戏
+	GoldenFraudGame = 12,                                   // 炸金花游戏
+	FightLandlordGame = 13,                                 // 斗地主游戏
 };
 
 // 服务ID的倍数基值，即服务 ServiceType = ServiceID / ServiceIdBaseValue
 static const unsigned int ServiceIdBaseValue = 1000;
-
 
 /*
 // 逻辑数据类型 

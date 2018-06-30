@@ -53,6 +53,8 @@ struct GameConfig
     unsigned int invitation_wait_secs;
     unsigned int check_disband_room_interval;
     unsigned int disband_room_wait_secs;
+    unsigned int ask_dismiss_room_interval;
+    unsigned int dismiss_room_secs;
 
     GameConfig() {};
 
@@ -63,6 +65,8 @@ struct GameConfig
         invitation_wait_secs = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "invitation_wait_secs"));
         check_disband_room_interval = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "check_disband_room_interval"));
         disband_room_wait_secs = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "disband_room_wait_secs"));
+        ask_dismiss_room_interval = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "ask_dismiss_room_interval"));
+        dismiss_room_secs = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "dismiss_room_secs"));
     }
 
     void output() const
@@ -72,6 +76,8 @@ struct GameConfig
         std::cout << "GameConfig : invitation_wait_secs = " << invitation_wait_secs << endl;
         std::cout << "GameConfig : check_disband_room_interval = " << check_disband_room_interval << endl;
         std::cout << "GameConfig : disband_room_wait_secs = " << disband_room_wait_secs << endl;
+        std::cout << "GameConfig : ask_dismiss_room_interval = " << ask_dismiss_room_interval << endl;
+        std::cout << "GameConfig : dismiss_room_secs = " << dismiss_room_secs << endl;
     }
 };
 

@@ -57,8 +57,27 @@ struct MoneyItem
     }
 };
 
+struct CommonCfg
+{
+    double room_card_to_gold_ratio;
+
+    CommonCfg() {};
+
+    CommonCfg(DOMNode* parent)
+    {
+        room_card_to_gold_ratio = CXmlConfig::stringToDouble(CXmlConfig::getValue(parent, "room_card_to_gold_ratio"));
+    }
+
+    void output() const
+    {
+        std::cout << "CommonCfg : room_card_to_gold_ratio = " << room_card_to_gold_ratio << endl;
+    }
+};
+
 struct MallData : public IXmlConfigBase
 {
+    CommonCfg common_cfg;
+    vector<unsigned int> gold_mall_list;
     map<unsigned int, MoneyItem> money_map;
     vector<MallGoodsCfg> mall_good_array;
 
@@ -78,6 +97,18 @@ struct MallData : public IXmlConfigBase
 
     virtual void set(DOMNode* parent)
     {
+        DomNodeArray _common_cfg;
+        CXmlConfig::getNode(parent, "param", "common_cfg", _common_cfg);
+        if (_common_cfg.size() > 0) common_cfg = CommonCfg(_common_cfg[0]);
+        
+        gold_mall_list.clear();
+        DomNodeArray _gold_mall_list;
+        CXmlConfig::getNode(parent, _gold_mall_list, "gold_mall_list", "value", "unsigned int");
+        for (unsigned int i = 0; i < _gold_mall_list.size(); ++i)
+        {
+            gold_mall_list.push_back(CXmlConfig::stringToInt(CXmlConfig::getValue(_gold_mall_list[i], "value")));
+        }
+        
         money_map.clear();
         DomNodeArray _money_map;
         CXmlConfig::getNode(parent, _money_map, "money_map", "MoneyItem");
@@ -100,6 +131,15 @@ struct MallData : public IXmlConfigBase
         const time_t __currentSecs__ = time(NULL);
         const string __currentTime__ = ctime(&__currentSecs__);
         std::cout << "\n!!!!!! set config value result = " << isSetConfigValueSuccess() << " !!!!!! current time = " << __currentTime__;
+        std::cout << "---------- MallData : common_cfg ----------" << endl;
+        common_cfg.output();
+        std::cout << "========== MallData : common_cfg ==========\n" << endl;
+        std::cout << "---------- MallData : gold_mall_list ----------" << endl;
+        for (unsigned int i = 0; i < gold_mall_list.size(); ++i)
+        {
+            std::cout << "value = " << gold_mall_list[i] << endl;
+        }
+        std::cout << "========== MallData : gold_mall_list ==========\n" << endl;
         std::cout << "---------- MallData : money_map ----------" << endl;
         unsigned int _money_map_count_ = 0;
         for (map<unsigned int, MoneyItem>::const_iterator it = money_map.begin(); it != money_map.end(); ++it)

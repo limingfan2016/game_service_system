@@ -112,8 +112,30 @@ struct WinnerNotice
     }
 };
 
+struct RoomCardCfg
+{
+    double creator_pay_count;
+    double average_pay_count;
+
+    RoomCardCfg() {};
+
+    RoomCardCfg(DOMNode* parent)
+    {
+        creator_pay_count = CXmlConfig::stringToDouble(CXmlConfig::getValue(parent, "creator_pay_count"));
+        average_pay_count = CXmlConfig::stringToDouble(CXmlConfig::getValue(parent, "average_pay_count"));
+    }
+
+    void output() const
+    {
+        std::cout << "RoomCardCfg : creator_pay_count = " << creator_pay_count << endl;
+        std::cout << "RoomCardCfg : average_pay_count = " << average_pay_count << endl;
+    }
+};
+
 struct CommonCfg
 {
+    unsigned int start_game_secs;
+    unsigned int prepare_game_secs;
     unsigned int compete_banker_secs;
     unsigned int confirm_banker_secs;
     unsigned int choice_bet_secs;
@@ -124,6 +146,8 @@ struct CommonCfg
 
     CommonCfg(DOMNode* parent)
     {
+        start_game_secs = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "start_game_secs"));
+        prepare_game_secs = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "prepare_game_secs"));
         compete_banker_secs = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "compete_banker_secs"));
         confirm_banker_secs = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "confirm_banker_secs"));
         choice_bet_secs = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "choice_bet_secs"));
@@ -133,6 +157,8 @@ struct CommonCfg
 
     void output() const
     {
+        std::cout << "CommonCfg : start_game_secs = " << start_game_secs << endl;
+        std::cout << "CommonCfg : prepare_game_secs = " << prepare_game_secs << endl;
         std::cout << "CommonCfg : compete_banker_secs = " << compete_banker_secs << endl;
         std::cout << "CommonCfg : confirm_banker_secs = " << confirm_banker_secs << endl;
         std::cout << "CommonCfg : choice_bet_secs = " << choice_bet_secs << endl;
@@ -145,8 +171,11 @@ struct CattlesBaseConfig : public IXmlConfigBase
 {
     map<int, string> card_type_name;
     CommonCfg common_cfg;
+    RoomCardCfg room_card_cfg;
+    vector<unsigned int> room_play_times;
     WinnerNotice winner_notice;
-    BaseNumberCfg base_number_cfg;
+    BaseNumberCfg gold_base_number_cfg;
+    BaseNumberCfg card_base_number_cfg;
     vector<RateRuleCfg> rate_rule_cfg;
     vector<unsigned int> player_count_cfg;
     map<int, unsigned int> special_card_rate;
@@ -179,13 +208,29 @@ struct CattlesBaseConfig : public IXmlConfigBase
         CXmlConfig::getNode(parent, "param", "common_cfg", _common_cfg);
         if (_common_cfg.size() > 0) common_cfg = CommonCfg(_common_cfg[0]);
         
+        DomNodeArray _room_card_cfg;
+        CXmlConfig::getNode(parent, "param", "room_card_cfg", _room_card_cfg);
+        if (_room_card_cfg.size() > 0) room_card_cfg = RoomCardCfg(_room_card_cfg[0]);
+        
+        room_play_times.clear();
+        DomNodeArray _room_play_times;
+        CXmlConfig::getNode(parent, _room_play_times, "room_play_times", "value", "unsigned int");
+        for (unsigned int i = 0; i < _room_play_times.size(); ++i)
+        {
+            room_play_times.push_back(CXmlConfig::stringToInt(CXmlConfig::getValue(_room_play_times[i], "value")));
+        }
+        
         DomNodeArray _winner_notice;
         CXmlConfig::getNode(parent, "param", "winner_notice", _winner_notice);
         if (_winner_notice.size() > 0) winner_notice = WinnerNotice(_winner_notice[0]);
         
-        DomNodeArray _base_number_cfg;
-        CXmlConfig::getNode(parent, "param", "base_number_cfg", _base_number_cfg);
-        if (_base_number_cfg.size() > 0) base_number_cfg = BaseNumberCfg(_base_number_cfg[0]);
+        DomNodeArray _gold_base_number_cfg;
+        CXmlConfig::getNode(parent, "param", "gold_base_number_cfg", _gold_base_number_cfg);
+        if (_gold_base_number_cfg.size() > 0) gold_base_number_cfg = BaseNumberCfg(_gold_base_number_cfg[0]);
+        
+        DomNodeArray _card_base_number_cfg;
+        CXmlConfig::getNode(parent, "param", "card_base_number_cfg", _card_base_number_cfg);
+        if (_card_base_number_cfg.size() > 0) card_base_number_cfg = BaseNumberCfg(_card_base_number_cfg[0]);
         
         rate_rule_cfg.clear();
         DomNodeArray _rate_rule_cfg;
@@ -226,12 +271,24 @@ struct CattlesBaseConfig : public IXmlConfigBase
         std::cout << "---------- CattlesBaseConfig : common_cfg ----------" << endl;
         common_cfg.output();
         std::cout << "========== CattlesBaseConfig : common_cfg ==========\n" << endl;
+        std::cout << "---------- CattlesBaseConfig : room_card_cfg ----------" << endl;
+        room_card_cfg.output();
+        std::cout << "========== CattlesBaseConfig : room_card_cfg ==========\n" << endl;
+        std::cout << "---------- CattlesBaseConfig : room_play_times ----------" << endl;
+        for (unsigned int i = 0; i < room_play_times.size(); ++i)
+        {
+            std::cout << "value = " << room_play_times[i] << endl;
+        }
+        std::cout << "========== CattlesBaseConfig : room_play_times ==========\n" << endl;
         std::cout << "---------- CattlesBaseConfig : winner_notice ----------" << endl;
         winner_notice.output();
         std::cout << "========== CattlesBaseConfig : winner_notice ==========\n" << endl;
-        std::cout << "---------- CattlesBaseConfig : base_number_cfg ----------" << endl;
-        base_number_cfg.output();
-        std::cout << "========== CattlesBaseConfig : base_number_cfg ==========\n" << endl;
+        std::cout << "---------- CattlesBaseConfig : gold_base_number_cfg ----------" << endl;
+        gold_base_number_cfg.output();
+        std::cout << "========== CattlesBaseConfig : gold_base_number_cfg ==========\n" << endl;
+        std::cout << "---------- CattlesBaseConfig : card_base_number_cfg ----------" << endl;
+        card_base_number_cfg.output();
+        std::cout << "========== CattlesBaseConfig : card_base_number_cfg ==========\n" << endl;
         std::cout << "---------- CattlesBaseConfig : rate_rule_cfg ----------" << endl;
         for (unsigned int i = 0; i < rate_rule_cfg.size(); ++i)
         {

@@ -94,6 +94,11 @@ enum EOperationManagerErrorCode
 	BSGetManagerIdError = 4069,                     // 获取棋牌室管理员ID错误
 	BSCheckManagerInfoError = 4070,                 // 检查棋牌室管理员信息错误
 	BSQueryApplyJoinPlayerInfoError = 4071,         // 查询棋牌室待审核玩家信息错误
+	
+	BSManagerLevelLimit = 4072,                     // 棋牌室管理员权限限制
+	BSChessHallContactNameInputUnlegal = 4073,      // 棋牌室联系人姓名输入非法
+	BSModifyChessHallInfoParamInvalid = 4074,       // 修改棋牌室信息参数无效
+	BSModifyChessHallInfoError = 4075,              // 修改棋牌室信息错误
 };
 
 

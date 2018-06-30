@@ -28,6 +28,9 @@ enum EHttpOperationErrorCode
     
     HOPTSendCheckPhoneNumberInfoError = 6014, // 发送手机验证码信息失败
     HOPTCheckPhoneNumberReplyError = 6015,    // 发送手机验证码信息返回错误
+	
+	HOPTSendPhoneMessageError = 6016,         // 发送手机短信息通知失败
+	HOPTSendPhoneMessageReplyError = 6017,    // 发送手机短信息通知返回错误
 };
 
 

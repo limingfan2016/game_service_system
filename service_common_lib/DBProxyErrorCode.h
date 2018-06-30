@@ -132,6 +132,26 @@ enum EDBProxyErrorCode
 	
 	DBProxyQueryManagerPlatformInfoError = 2093,    // 获取管理员所在的平台信息错误
 	DBProxyQueryManagerIdError = 2094,              // 查询棋牌室管理员ID错误
+	
+	DBProxyCreateRoomCardInsufficient = 2095,       // 创建棋牌室游戏房间房卡数量不足
+	
+	DBProxyGenerateRoomGameRecordSqlError = 2096,   // 生成房间游戏记录sql语句错误
+	DBProxyAddRoomGameRecordError = 2097,           // 添加房间游戏记录错误
+	
+	DBProxyQueryGameRoomError = 2098,               // 查询游戏房间失败
+	DBProxyNoFoundGameRoomError = 2099,             // 找不到棋牌室游戏房间
+	DBProxyGameRoomStatusError = 2100,              // 游戏房间状态错误
+	
+	DBProxyQueryRoomGameRecordError = 2101,         // 查询房间游戏记录信息错误
+	DBProxyQueryRoomRecordPlayerError = 2102,       // 查询房间游戏记录玩家信息错误
+	DBProxyGetRoomRecordPlayerError = 2103,         // 获取房间游戏记录玩家信息错误
+	DBProxyQueryDetailedRoomRecordError = 2104,     // 查询房间游戏详细记录错误
+	
+	DBProxyUpdateUserStaticInfoFailed = 2105,       // 刷新用户静态信息失败
+	DBProxyUpdateUserDynamicInfoFailed = 2106,      // 刷新用户动态信息失败
+	
+	DBProxyBuyGoldRoomCardInsufficient = 2107,      // 购买金币房卡数量不足
+	DBProxyAddGoodsExchangeRecordError = 2108,      // 添加物品兑换记录错误
 };
 
 

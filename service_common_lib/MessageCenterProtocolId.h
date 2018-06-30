@@ -31,6 +31,9 @@ enum EMessageCenterProtocolId
 	
 	// 转发服务消息通知
 	MSGCENTER_FORWARD_SERVICE_MESSAGE_NOTIFY = 9,
+	
+	// 系统消息通知
+	MSGCENTER_SYSTEM_MESSAGE_NOTIFY = 10,
 };
 
 

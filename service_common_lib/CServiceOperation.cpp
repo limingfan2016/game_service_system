@@ -111,6 +111,16 @@ const NCattlesBaseConfig::CattlesBaseConfig& CServiceOperation::getCattlesBaseCf
 	return NCattlesBaseConfig::CattlesBaseConfig::getConfigValue(NCommonConfig::CommonCfg::getConfigValue().config_file.cattles_base_cfg.c_str(), isReset);
 }
 
+const NGoldenFraudBaseConfig::GoldenFraudBaseConfig& CServiceOperation::getGoldenFraudBaseCfg(bool isReset)
+{
+	return NGoldenFraudBaseConfig::GoldenFraudBaseConfig::getConfigValue(NCommonConfig::CommonCfg::getConfigValue().config_file.golden_fraud_base_cfg.c_str(), isReset);
+}
+
+const NFightLandlordBaseConfig::FightLandlordBaseConfig& CServiceOperation::getFightLandlordBaseCfg(bool isReset)
+{
+	return NFightLandlordBaseConfig::FightLandlordBaseConfig::getConfigValue(NCommonConfig::CommonCfg::getConfigValue().config_file.fight_landlord_base_cfg.c_str(), isReset);
+}
+	
 bool CServiceOperation::createDataLogger(const char* cfgName, const char* fileItem, const char* sizeItem, const char* backupCountItem)
 {
 	if (m_dataLogger == NULL)
@@ -167,7 +177,7 @@ void CServiceOperation::stopTimer(unsigned int& timerId)
 unsigned int CServiceOperation::getRecordId(RecordIDType recordId)
 {
     static unsigned int SRecordIndex = 0;
-	const unsigned int MaxRecordIndex = 100000;
+	const unsigned int MaxRecordIndex = 1000000;
 
 	return snprintf(recordId, sizeof(RecordIDType) - 1, "%uS%uI%u", (unsigned int)time(NULL), m_msgHandler->getSrvId(), ++SRecordIndex % MaxRecordIndex);
 }

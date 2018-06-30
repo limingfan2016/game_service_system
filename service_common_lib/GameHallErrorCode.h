@@ -31,6 +31,11 @@ enum EGameHallErrorCode
     GameHallInvalidPhoneVerificationCode = 1014,     // 无效的手机验证码
 
 	GameHallCreateGameRoomParamInvalid = 1015,       // 创建棋牌室游戏房间参数无效
+	GameHallCreateRoomPlayerCountInvalid = 1016,     // 创建棋牌室游戏房间玩家人数无效
+	GameHallCreateRoomGameTimesInvalid = 1017,       // 创建棋牌室游戏房间游戏局数无效
+	GameHallCreateRoomPayModeInvalid = 1018,         // 创建棋牌室游戏房间付费模式无效
+	GameHallCreateRoomStartModeInvalid = 1019,       // 创建棋牌室游戏房间开桌方式无效
+	GameHallCreateRoomBaseRateInvalid = 1020,        // 创建棋牌室游戏房间底注（基础倍率）无效
 };
 
 

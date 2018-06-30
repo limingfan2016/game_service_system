@@ -110,6 +110,10 @@ enum EBusinessClientProtocolId
 	
 	// C端管理员操作棋牌室玩家通知B端
 	BSC_MANAGER_OPT_HALL_PLAYER_NOTIFY = 45,
+	
+	// 修改棋牌室信息
+	BSC_MODIFY_HALL_INFO_REQ = 46,
+	BSC_MODIFY_HALL_INFO_RSP = 47,
 };
 
 

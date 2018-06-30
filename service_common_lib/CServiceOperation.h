@@ -18,8 +18,10 @@
 #include "_NCommonConfig_.h"
 #include "_DBConfig_.h"
 #include "_MallConfigData_.h"
-#include "_NCattlesBaseConfig_.h"
 #include "_ServiceCommonConfig_.h"
+#include "_NCattlesBaseConfig_.h"
+#include "_NGoldenFraudBaseConfig_.h"
+#include "_NFightLandlordBaseConfig_.h"
 
 
 namespace NProject
@@ -54,6 +56,12 @@ public:
 
     // 牛牛游戏基础配置信息
 	const NCattlesBaseConfig::CattlesBaseConfig& getCattlesBaseCfg(bool isReset = false);
+	
+	// 炸金花游戏基础配置信息
+	const NGoldenFraudBaseConfig::GoldenFraudBaseConfig& getGoldenFraudBaseCfg(bool isReset = false);
+	
+	// 斗地主游戏基础配置信息
+	const NFightLandlordBaseConfig::FightLandlordBaseConfig& getFightLandlordBaseCfg(bool isReset = false);
 
 public:
 	// 检查服务数据日志配置信息并创建对应的日志对象
