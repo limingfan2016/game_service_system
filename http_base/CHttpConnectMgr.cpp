@@ -64,7 +64,7 @@ bool CHttpConnectMgr::isRunning()
 
 bool CHttpConnectMgr::doHttpConnect(const char* ip, const unsigned short port, ConnectData* connData)
 {
-	if (ip == NULL || *ip == '\0') return false;
+	if (ip == NULL || *ip == '\0' || connData == NULL) return false;
 
     connData->fd = -1;
 	connData->status = ConnectStatus::ConnectError;
@@ -126,6 +126,28 @@ bool CHttpConnectMgr::doHttpConnect(const char* ip, const unsigned short port, C
     return (rc == Success);
 }
 
+ConnectData* CHttpConnectMgr::receiveConnectData()
+{
+	return (ConnectData*)m_dataQueue.get();
+}
+
+bool CHttpConnectMgr::haveConnectData()
+{
+	return m_dataQueue.have();
+}
+
+void CHttpConnectMgr::sendConnectData(ConnectData* connData)
+{
+	if (connData != NULL)
+	{
+		// http短连接，应答消息回来后直接关闭连接
+		// 必须先关闭连接，防止epoll触发其他事件（比如对端先关连接事件）导致重复处理错误
+		closeHttpConnect(connData);
+
+	    m_dataQueue.put(connData);
+	}
+}
+
 void CHttpConnectMgr::closeHttpConnect(ConnectData* connData)
 {
 	if (connData->fd > 0)
@@ -142,15 +164,6 @@ void CHttpConnectMgr::closeHttpConnect(ConnectData* connData)
 	}
 }
 
-ConnectData* CHttpConnectMgr::getConnectData()
-{
-	return (ConnectData*)m_dataQueue.get();
-}
-
-bool CHttpConnectMgr::haveConnectData()
-{
-	return m_dataQueue.have();
-}
 
 void CHttpConnectMgr::run()
 {
@@ -207,10 +220,11 @@ void CHttpConnectMgr::onActiveConnect(uint32_t eventVal, ConnectData* conn)
 	if ((eventVal & (EPOLLERR | EPOLLHUP | EPOLLRDHUP))
 		|| (rc != Success) || (err != EINPROGRESS && err != 0))
 	{
-		ReleaseErrorLog("create http connect error, error = %d, info = %s", err, strerror(err));
+		OptErrorLog("create http connect error, fd = %d, event = %d, rc = %d, error = %d, info = %s",
+	    conn->fd, (eventVal & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)), rc, err, strerror(err));
 		
 		conn->status = ConnectStatus::ConnectError;
-		m_dataQueue.put(conn);
+		sendConnectData(conn);
 		return;
 	}
 
@@ -221,11 +235,10 @@ void CHttpConnectMgr::onActiveConnect(uint32_t eventVal, ConnectData* conn)
 		OptWarnLog("connect http host time out, requestId = %d, key = %s", conn->keyData.requestId, conn->keyData.key);
 		
 		conn->status = ConnectStatus::TimeOut;
-		m_dataQueue.put(conn);
+		sendConnectData(conn);
 		return;
 	}
 
-    // OptWarnLog("test only, in epoll call back connect http host success, sslConnect = %p", conn->sslConnect);
 	conn->status = ConnectStatus::Normal;  // 连接建立成功了
 	if (conn->sslConnect != NULL) return doSSLConnect(conn);  // 存在 https 调用
 
@@ -238,7 +251,7 @@ void CHttpConnectMgr::handleConnect(uint32_t eventVal, ConnectData* conn)
 {
 	if (eventVal & (EPOLLERR | EPOLLHUP | EPOLLRDHUP))   // 连接异常，需要关闭此类连接
 	{
-		ReleaseWarnLog("ready close error http connect");
+		OptWarnLog("ready close error http connect, have data = %d", (eventVal & EPOLLIN));
 		
 		if (eventVal & EPOLLIN)
 		{
@@ -247,7 +260,7 @@ void CHttpConnectMgr::handleConnect(uint32_t eventVal, ConnectData* conn)
 		else
 		{
 			conn->status = ConnectStatus::ConnectError;
-			m_dataQueue.put(conn);
+			sendConnectData(conn);
 		}
 	}
 	else
@@ -283,7 +296,7 @@ void CHttpConnectMgr::writeToConnect(ConnectData* conn)
 		
 		OptWarnLog("write to http connect error, nWrite = %d, errno = %d, info = %s", nWrite, errno, strerror(errno));
 		conn->status = ConnectStatus::ConnectError;
-		m_dataQueue.put(conn);
+		sendConnectData(conn);
 	}
 }
 
@@ -297,13 +310,13 @@ void CHttpConnectMgr::readFromConnect(ConnectData* conn)
 	if (nRead > 0)
 	{
 		const int status = parseReadData(nRead, conn);
-		if (status == ConnectStatus::DataError || status == ConnectStatus::CanRead) m_dataQueue.put(conn);
+		if (status == ConnectStatus::DataError || status == ConnectStatus::CanRead) sendConnectData(conn);
 		return;
 	}
 	else if (nRead == 0)
 	{
 		conn->status = ConnectStatus::CanRead;
-		m_dataQueue.put(conn);
+		sendConnectData(conn);
 		return;
 	}
 	
@@ -318,7 +331,7 @@ void CHttpConnectMgr::readFromConnect(ConnectData* conn)
 	
 	OptWarnLog("read from http connect, nRead = %d, errno = %d, info = %s", nRead, errno, strerror(errno));
 	conn->status = ConnectStatus::ConnectError;
-	m_dataQueue.put(conn);
+	sendConnectData(conn);
 }
 
 int CHttpConnectMgr::parseReadData(int nRead, ConnectData* conn)
@@ -347,7 +360,7 @@ int CHttpConnectMgr::parseReadData(int nRead, ConnectData* conn)
 			else if (rc == BodyDataError)
 			{
 				// conn->status = ConnectStatus::DataError;
-		        // m_dataQueue.put(conn);
+		        // sendConnectData(conn);
 			}
 			
 			// OptWarnLog("read data from connect, data = %s, status = %d, fd = %d, key = %s, len = %d, rc = %d",
@@ -402,12 +415,10 @@ void CHttpConnectMgr::doSSLConnect(ConnectData* connData)
 				connData->status = ConnectStatus::TimeOut;
 				OptWarnLog("connect https to do SSL operation host time out, requestId = %d, key = %s", connData->keyData.requestId, connData->keyData.key);
 			}
-			
-			// OptWarnLog("test only, in CHttpConnectMgr::doSSLConnect time = %u, result = %d", (unsigned int)time(NULL), time(NULL) > connData->lastTimeSecs);
 
 		} while (0);
 		
-		if (connData->status != ConnectStatus::SSLConnecting) m_dataQueue.put(connData);
+		if (connData->status != ConnectStatus::SSLConnecting) sendConnectData(connData);
 	}
 }
 
@@ -421,14 +432,14 @@ void CHttpConnectMgr::writeToSSLConnect(ConnectData* connData)
 	        connData->sendDataLen -= nWrite;
 			if (connData->sendDataLen > 0) memmove(connData->sendData, connData->sendData + nWrite, connData->sendDataLen);
 		    else connData->status = ConnectStatus::AlreadyWrite;
-			
+
 			return;
 		}
 		else if (SSL_get_error(connData->sslConnect, nWrite) != SSL_ERROR_WANT_WRITE)  // 如果是 SSL_ERROR_WANT_WRITE 则继续等待下一次写事件
 		{
 			OptWarnLog("write to https connect error, nWrite = %d, err = %d", nWrite, SSL_get_error(connData->sslConnect, nWrite));
 			connData->status = ConnectStatus::SSLConnectError;
-			m_dataQueue.put(connData);
+			sendConnectData(connData);
 		}
 	}
 }
@@ -439,7 +450,8 @@ void CHttpConnectMgr::readFromSSLConnect(ConnectData* connData)
 	if (nRead > 0)
 	{
 		const int status = parseReadData(nRead, connData);
-		if (status == ConnectStatus::DataError || status == ConnectStatus::CanRead) m_dataQueue.put(connData);
+		if (status == ConnectStatus::DataError || status == ConnectStatus::CanRead) sendConnectData(connData);
+
 		return;
 	}
 
@@ -447,13 +459,17 @@ void CHttpConnectMgr::readFromSSLConnect(ConnectData* connData)
 	if (err == SSL_ERROR_ZERO_RETURN)  // 已经结束了
 	{
 		connData->status = ConnectStatus::CanRead;
-		m_dataQueue.put(connData);
+		sendConnectData(connData);
 	}
 	else if (err != SSL_ERROR_WANT_READ)  // 如果是 SSL_ERROR_WANT_READ 则继续等待下一次读事件
 	{
 		OptWarnLog("read from https connect error, nRead = %d, err = %d", nRead, err);
-		connData->status = ConnectStatus::SSLConnectError;
-		m_dataQueue.put(connData);
+		
+		// 0 The read operation was not successful. 
+		// The reason may either be a clean shutdown due to a "close notify" alert sent by the peer 
+		// (in which case the SSL_RECEIVED_SHUTDOWN
+		connData->status = (nRead == 0 || err == SSL_RECEIVED_SHUTDOWN) ? ConnectStatus::CanRead : ConnectStatus::SSLConnectError;
+		sendConnectData(connData);
 	}
 }
 

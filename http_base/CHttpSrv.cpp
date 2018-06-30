@@ -116,7 +116,7 @@ ConnectData* CHttpDataHandler::getConnectData()
 void CHttpDataHandler::putConnectData(ConnectData* connData)
 {
 	if (connData->cbData != NULL && connData->cbData->flag == 0) putDataBuffer((const char*)connData->cbData);
-	
+
 	m_memForConnectData.put((char*)connData);
 }
 
@@ -162,8 +162,8 @@ bool CHttpDataHandler::doHttpConnect(const char* ip, unsigned int port, const ch
 	}
 
     bool isOK = m_httpConnectMgr.doHttpConnect(ip, port, cd);
-	OptInfoLog("do http connect, result = %d, userData = %s, request id = %u, message len = %u, content = %s",
-	isOK, cd->keyData.key, requestId, cd->sendDataLen, cd->sendData);
+	OptInfoLog("do http connect, cd = %p, result = %d, fd = %d, userData = %s, request id = %u, message len = %u, content = %s",
+	cd, isOK, cd->fd, cd->keyData.key, requestId, cd->sendDataLen, cd->sendData);
 	
 	if (isOK)
 	{
@@ -196,7 +196,7 @@ bool CHttpDataHandler::doHttpConnect(const char* ip, const unsigned short port, 
 // 主动发送的http请求收到应答消息
 int CHttpDataHandler::onHandle()
 {
-	ConnectData* cd = m_httpConnectMgr.getConnectData();
+	ConnectData* cd = m_httpConnectMgr.receiveConnectData();
 	if (cd != NULL)
 	{
 		// only log
@@ -212,12 +212,15 @@ int CHttpDataHandler::onHandle()
 				isSuccess = (replyIt->second.instance->*replyIt->second.handler)(cd);
 			}
 		}
+
+		if (isSuccess) OptInfoLog("receive connect data and operation finish, cd = %p, key = %s, service id = %d, protocol id = %d, requestId = %d, status = %d, fd = %d",
+		cd, cd->keyData.key, cd->keyData.srvId, cd->keyData.protocolId, cd->keyData.requestId, cd->status, cd->fd);
 		
-		if (!isSuccess) OptWarnLog("receive connect data and operation failed, key = %s, service id = %d, protocol id = %d, requestId = %d, status = %d, fd = %d, data = %s",
-		cd->keyData.key, cd->keyData.srvId, cd->keyData.protocolId, cd->keyData.requestId, cd->status, cd->fd, cd->receiveData);
+		else OptWarnLog("receive connect data and operation failed, cd = %p, key = %s, service id = %d, protocol id = %d, requestId = %d, status = %d, fd = %d, data = %s",
+		cd, cd->keyData.key, cd->keyData.srvId, cd->keyData.protocolId, cd->keyData.requestId, cd->status, cd->fd, cd->receiveData);
 		
-		// http短连接，应答消息回来后直接关闭连接
-		m_httpConnectMgr.closeHttpConnect(cd);
+		// http短连接，应答消息回来后底层已经直接关闭连接了
+		// 这里直接回收数据内存块即可
 		putConnectData(cd);
 		
 		if (m_httpConnectMgr.haveConnectData()) return Success;

@@ -34,10 +34,14 @@ public:
 	
 public:
     bool doHttpConnect(const char* ip, const unsigned short port, ConnectData* connData);
-	void closeHttpConnect(ConnectData* connData);
-	
-	ConnectData* getConnectData();
+
+	ConnectData* receiveConnectData();
 	bool haveConnectData();
+	
+private:
+    void sendConnectData(ConnectData* connData);
+
+	void closeHttpConnect(ConnectData* connData);
 
 private:
     // http 消息调用
