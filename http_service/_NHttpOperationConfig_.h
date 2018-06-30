@@ -90,41 +90,47 @@ struct WXTokenTimeOut
     }
 };
 
-struct CheckPhoneNumberCfg
+struct PhoneMessageCfg
 {
     string host;
     string protocol;
-    string url;
     string app_id;
     string app_key;
-    unsigned int template_id;
+    string code_url;
+    string notify_url;
+    unsigned int code_template_id;
+    unsigned int notify_template_id;
 
-    CheckPhoneNumberCfg() {};
+    PhoneMessageCfg() {};
 
-    CheckPhoneNumberCfg(DOMNode* parent)
+    PhoneMessageCfg(DOMNode* parent)
     {
         host = CXmlConfig::getValue(parent, "host");
         protocol = CXmlConfig::getValue(parent, "protocol");
-        url = CXmlConfig::getValue(parent, "url");
         app_id = CXmlConfig::getValue(parent, "app_id");
         app_key = CXmlConfig::getValue(parent, "app_key");
-        template_id = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "template_id"));
+        code_url = CXmlConfig::getValue(parent, "code_url");
+        notify_url = CXmlConfig::getValue(parent, "notify_url");
+        code_template_id = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "code_template_id"));
+        notify_template_id = CXmlConfig::stringToInt(CXmlConfig::getValue(parent, "notify_template_id"));
     }
 
     void output() const
     {
-        std::cout << "CheckPhoneNumberCfg : host = " << host << endl;
-        std::cout << "CheckPhoneNumberCfg : protocol = " << protocol << endl;
-        std::cout << "CheckPhoneNumberCfg : url = " << url << endl;
-        std::cout << "CheckPhoneNumberCfg : app_id = " << app_id << endl;
-        std::cout << "CheckPhoneNumberCfg : app_key = " << app_key << endl;
-        std::cout << "CheckPhoneNumberCfg : template_id = " << template_id << endl;
+        std::cout << "PhoneMessageCfg : host = " << host << endl;
+        std::cout << "PhoneMessageCfg : protocol = " << protocol << endl;
+        std::cout << "PhoneMessageCfg : app_id = " << app_id << endl;
+        std::cout << "PhoneMessageCfg : app_key = " << app_key << endl;
+        std::cout << "PhoneMessageCfg : code_url = " << code_url << endl;
+        std::cout << "PhoneMessageCfg : notify_url = " << notify_url << endl;
+        std::cout << "PhoneMessageCfg : code_template_id = " << code_template_id << endl;
+        std::cout << "PhoneMessageCfg : notify_template_id = " << notify_template_id << endl;
     }
 };
 
 struct HttpOptConfig : public IXmlConfigBase
 {
-    CheckPhoneNumberCfg check_phone_number_cfg;
+    PhoneMessageCfg phone_message_cfg;
     WXTokenTimeOut wx_token_timeout;
     map<unsigned int, ThirdPlatformInfo> third_platform_list;
 
@@ -144,9 +150,9 @@ struct HttpOptConfig : public IXmlConfigBase
 
     virtual void set(DOMNode* parent)
     {
-        DomNodeArray _check_phone_number_cfg;
-        CXmlConfig::getNode(parent, "param", "check_phone_number_cfg", _check_phone_number_cfg);
-        if (_check_phone_number_cfg.size() > 0) check_phone_number_cfg = CheckPhoneNumberCfg(_check_phone_number_cfg[0]);
+        DomNodeArray _phone_message_cfg;
+        CXmlConfig::getNode(parent, "param", "phone_message_cfg", _phone_message_cfg);
+        if (_phone_message_cfg.size() > 0) phone_message_cfg = PhoneMessageCfg(_phone_message_cfg[0]);
         
         DomNodeArray _wx_token_timeout;
         CXmlConfig::getNode(parent, "param", "wx_token_timeout", _wx_token_timeout);
@@ -166,9 +172,9 @@ struct HttpOptConfig : public IXmlConfigBase
         const time_t __currentSecs__ = time(NULL);
         const string __currentTime__ = ctime(&__currentSecs__);
         std::cout << "\n!!!!!! set config value result = " << isSetConfigValueSuccess() << " !!!!!! current time = " << __currentTime__;
-        std::cout << "---------- HttpOptConfig : check_phone_number_cfg ----------" << endl;
-        check_phone_number_cfg.output();
-        std::cout << "========== HttpOptConfig : check_phone_number_cfg ==========\n" << endl;
+        std::cout << "---------- HttpOptConfig : phone_message_cfg ----------" << endl;
+        phone_message_cfg.output();
+        std::cout << "========== HttpOptConfig : phone_message_cfg ==========\n" << endl;
         std::cout << "---------- HttpOptConfig : wx_token_timeout ----------" << endl;
         wx_token_timeout.output();
         std::cout << "========== HttpOptConfig : wx_token_timeout ==========\n" << endl;

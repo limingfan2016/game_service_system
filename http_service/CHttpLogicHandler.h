@@ -38,6 +38,10 @@ private:
 private:
     bool sendMobileVerificationCodeReply(ConnectData* cd);
 	
+	bool sendMobilePhoneMessageReply(ConnectData* cd);
+	
+	bool checkPhoneHttpReplyMessage(ConnectData* cd);
+	
     // 服务收到的POST请求
 private:
 	// bool receivePostMessage(const char* connId, Connect* conn, const RequestHeader& reqHeaderData, const HttpMsgBody& msgBody);
@@ -45,12 +49,14 @@ private:
 private:
 	void checkPhoneNumber(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
 
+    void sendMobilePhoneMessage(const char* data, const unsigned int len, unsigned int srcSrvId, unsigned short srcModuleId, unsigned short srcProtocolId);
+
 private:
 	CHttpMsgHandler* m_msgHandler;
 	
 private:
-	strIP_t m_checkPhoneNumberSrvIp;
-    unsigned short m_checkPhoneNumberSrvPort;
+	strIP_t m_phoneNumberSrvIp;
+    unsigned short m_phoneNumberSrvPort;
 };
 
 }

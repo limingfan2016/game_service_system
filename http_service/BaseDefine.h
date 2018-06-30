@@ -50,6 +50,7 @@ enum EHttpReplyHandlerID
 	EGetWeiXinUserInfoId,                       // 获取微信用户信息
     
     ESendMobileVerificationCodeId,              // 发送手机验证码
+	ESendMobilePhoneMessageId,                  // 发送手机通知短信息
 	
 	ERequestIdEndValue,
 };
