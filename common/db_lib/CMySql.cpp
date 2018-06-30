@@ -26,19 +26,31 @@ enum ResultStatus
 };
 
 // 查询结果集合数据
+// 查询结果集合数据
+CQueryResult::CQueryResult() : m_dbOpt(NULL), m_result(NULL), m_resultStatus(singleResult)
+{
+}
+
 CQueryResult::CQueryResult(CDBOpertaion* dbOpt, MYSQL_RES* result, int status) : m_dbOpt(dbOpt), m_result(result), m_resultStatus(status)
 {
-
 }
 
 CQueryResult::~CQueryResult()
 {
-	while (nextResult());  // 清空所有可能还存在的结果集，防止后面执行sql命令出错
-	freeResult();
+	reset();
+}
+
+void CQueryResult::reset(CDBOpertaion* dbOpt, MYSQL_RES* result, int status)
+{
+	if (m_dbOpt != NULL)
+	{
+		while (nextResult());  // 清空所有可能还存在的结果集，防止后面执行sql命令出错
+		freeResult();
+	}
 	
-	m_dbOpt = NULL;
-	m_result = NULL;
-	m_resultStatus = singleResult;
+	m_dbOpt = dbOpt;
+	m_result = result;
+	m_resultStatus = status;
 }
 
 RowDataPtr CQueryResult::getNextRow()
@@ -86,6 +98,8 @@ bool CQueryResult::nextResult()
 		m_resultStatus = nextToResult;      // 多语句执行结果集
 		if (m_result != NULL) return true;  // 第一个执行语句已经提前获取结果集了，如果存在则直接返回
 	}
+	
+	if (m_dbOpt == NULL) return false;
 	
 	freeResult();
 	MYSQL* handler = m_dbOpt->getHandler();
@@ -314,9 +328,10 @@ int CDBOpertaion::executeSQL(const char* sql, const unsigned int len)
 
 	if(mysql_real_query(&m_mysqlHandler, sql, len) != 0)
 	{
-		if (2013 == errorNum())
+		const unsigned int LostConnectionError = 2013;
+		if (LostConnectionError == errorNum())
 		{
-			if (mysql_real_query(&m_mysqlHandler, sql, len) != 0)
+			if (mysql_real_query(&m_mysqlHandler, sql, len) != 0)  // 断连则尝试重连
 			{
 				std::string strSql(sql, len);
 				ReleaseErrorLog("redo execute sql error = %d, status = %s, info = %s, sql len = %d, data = %s",
@@ -353,7 +368,7 @@ int CDBOpertaion::dropTable(const char* tableName)
 	if (tableName == NULL || *tableName == '\0') return InvalidParam;
 	
 	char dropSql[MaxNameLen] = {0};
-	const unsigned int len = snprintf(dropSql, MaxNameLen - 1, "DROP TABLE IF EXISTS %s", tableName);
+	const unsigned int len = snprintf(dropSql, MaxNameLen - 1, "DROP TABLE IF EXISTS %s;", tableName);
 	return executeSQL(dropSql, len);
 }
 
@@ -376,6 +391,25 @@ unsigned long CDBOpertaion::getAffectedRows()
 
 
 // 查询数据库表，一次性获取全部查询结果集合
+int CDBOpertaion::queryTableAllResult(const char* sql, CQueryResult& qResult)
+{
+	if (sql == NULL || *sql == '\0') return InvalidParam;
+	return queryTableAllResult(sql, strlen(sql), qResult);
+}
+
+int CDBOpertaion::queryTableAllResult(const char* sql, const unsigned int len, CQueryResult& qResult)
+{
+	qResult.reset();  // 先重置，释放可能存在的结果集
+
+    MYSQL_RES* result = NULL;
+	int rc = queryTableAllResult(sql, len, result);
+	if (rc != Success) return rc;
+	
+	if (result != NULL) qResult.reset(this, result, singleResult);
+
+	return Success;
+}
+
 int CDBOpertaion::queryTableAllResult(const char* sql, CQueryResult*& qResult)
 {
 	if (sql == NULL || *sql == '\0') return InvalidParam;
@@ -384,29 +418,43 @@ int CDBOpertaion::queryTableAllResult(const char* sql, CQueryResult*& qResult)
 
 int CDBOpertaion::queryTableAllResult(const char* sql, const unsigned int len, CQueryResult*& qResult)
 {
-	int rc = executeSQL(sql, len);
+	MYSQL_RES* result = NULL;
+	int rc = queryTableAllResult(sql, len, result);
 	if (rc != Success) return rc;
 	
-	MYSQL_RES* result = mysql_store_result(&m_mysqlHandler);
-	if (result == NULL)
-	{
-		if (mysql_field_count(&m_mysqlHandler) != 0)
-		{
-			ReleaseErrorLog("get all sql result error = %d, status = %s, info = %s.", errorNum(), stateInfo(), errorInfo());
-			return GetSqlAllResultError;
-		}
-		qResult = NULL;  // 当前查询没有结果集
-	}
-	else
+	if (result != NULL)
 	{
 		NEW(qResult, CQueryResult(this, result, singleResult));
 	    if (qResult == NULL) return NoMemory;
+	}
+	else
+	{
+		qResult = NULL;  // 当前查询没有结果集
 	}
 	
 	return Success;
 }
 
 // 查询数据库表，需要依次获取查询结果集合
+int CDBOpertaion::queryTableResult(const char* sql, CQueryResult& qResult)
+{
+	if (sql == NULL || *sql == '\0') return InvalidParam;
+	return queryTableResult(sql, strlen(sql), qResult);
+}
+
+int CDBOpertaion::queryTableResult(const char* sql, const unsigned int len, CQueryResult& qResult)
+{
+	qResult.reset();  // 先重置，释放可能存在的结果集
+
+    MYSQL_RES* result = NULL;
+	int rc = queryTableResult(sql, len, result);
+	if (rc != Success) return rc;
+	
+	if (result != NULL) qResult.reset(this, result, singleResult);
+
+	return Success;
+}
+
 int CDBOpertaion::queryTableResult(const char* sql, CQueryResult*& qResult)
 {
 	if (sql == NULL || *sql == '\0') return InvalidParam;
@@ -415,23 +463,18 @@ int CDBOpertaion::queryTableResult(const char* sql, CQueryResult*& qResult)
 
 int CDBOpertaion::queryTableResult(const char* sql, const unsigned int len, CQueryResult*& qResult)
 {
-	int rc = executeSQL(sql, len);
+	MYSQL_RES* result = NULL;
+	int rc = queryTableResult(sql, len, result);
 	if (rc != Success) return rc;
 	
-	MYSQL_RES* result =  mysql_use_result(&m_mysqlHandler);
-	if (result == NULL)
-	{
-		if (errorNum() != 0)
-		{
-			ReleaseErrorLog("get single sql result error = %d, status = %s, info = %s.", errorNum(), stateInfo(), errorInfo());
-			return GetSqlResultError;
-		}
-		qResult = NULL;  // 当前查询没有结果集
-	}
-	else
+	if (result != NULL)
 	{
 		NEW(qResult, CQueryResult(this, result, singleResult));
 	    if (qResult == NULL) return NoMemory;
+	}
+	else
+	{
+		qResult = NULL;  // 当前查询没有结果集
 	}
 	
 	return Success;
@@ -445,6 +488,24 @@ void CDBOpertaion::releaseQueryResult(CQueryResult*& qResult)
 
 
 // 一次执行多条语句
+int CDBOpertaion::executeMultiSql(const char* sql, CQueryResult& qResult)
+{
+	if (sql == NULL || *sql == '\0') return InvalidParam;
+	return executeMultiSql(sql, strlen(sql), qResult);
+}
+
+int CDBOpertaion::executeMultiSql(const char* sql, const unsigned int len, CQueryResult& qResult)
+{
+	int rc = queryTableAllResult(sql, len, qResult);
+	if (rc == Success)
+	{
+		qResult.m_dbOpt = this;
+		qResult.m_resultStatus = multiResult;  // 多语句执行，第一条命令可能无结果集，但并不表示后面的语句也无结果集
+    }
+
+	return rc;
+}
+
 int CDBOpertaion::executeMultiSql(const char* sql, CQueryResult*& qResult)
 {
 	if (sql == NULL || *sql == '\0') return InvalidParam;
@@ -527,6 +588,49 @@ const char* CDBOpertaion::getDBName()
 MYSQL* CDBOpertaion::getHandler()
 {
 	return &m_mysqlHandler;
+}
+
+
+// 查询数据库表，一次性获取全部查询结果集合
+int CDBOpertaion::queryTableAllResult(const char* sql, const unsigned int len, MYSQL_RES*& result)
+{
+	int rc = executeSQL(sql, len);
+	if (rc != Success) return rc;
+	
+	result = mysql_store_result(&m_mysqlHandler);
+	if (result == NULL)
+	{
+		if (mysql_field_count(&m_mysqlHandler) != 0)
+		{
+			ReleaseErrorLog("get all sql result error = %d, status = %s, info = %s.", errorNum(), stateInfo(), errorInfo());
+			return GetSqlAllResultError;
+		}
+		
+		// result == NULL 当前查询没有结果集
+	}
+
+	return Success;
+}
+
+// 查询数据库表，需要依次获取查询结果集合
+int CDBOpertaion::queryTableResult(const char* sql, const unsigned int len, MYSQL_RES*& result)
+{
+	int rc = executeSQL(sql, len);
+	if (rc != Success) return rc;
+	
+	result =  mysql_use_result(&m_mysqlHandler);
+	if (result == NULL)
+	{
+		if (errorNum() != 0)
+		{
+			ReleaseErrorLog("get single sql result error = %d, status = %s, info = %s.", errorNum(), stateInfo(), errorInfo());
+			return GetSqlResultError;
+		}
+		
+		// result == NULL 当前查询没有结果集
+	}
+	
+	return Success;
 }
 
 

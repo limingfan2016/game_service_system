@@ -163,9 +163,6 @@ bind[3].error= &error[3];
 namespace NDBOpt
 {
 
-static const unsigned int MaxNameLen = 128;  // ID&Name 最大长度
-
-
 #if 0
 // Mysql 表列字段数据定义
 typedef struct st_mysql_field
@@ -228,6 +225,9 @@ typedef char **MYSQL_ROW;           /* return data as array of strings */
 #endif  // #if 0
 
 
+
+
+
 // Mysql 表行数据定义
 // typedef char **MYSQL_ROW;  /* return data as array of strings */
 typedef MYSQL_ROW RowDataPtr;
@@ -240,13 +240,19 @@ typedef MYSQL_BIND BindData;
 
 class CDBOpertaion;
 
+// ID&Name 最大长度
+static const unsigned int MaxNameLen = 128;
+
 
 // 查询结果集合数据
 class CQueryResult
 {
-private:
-	CQueryResult(CDBOpertaion* dbOpt, MYSQL_RES* result, int status);
+public:
+    CQueryResult();
 	~CQueryResult();
+	
+public:
+    void reset(CDBOpertaion* dbOpt = NULL, MYSQL_RES* result = NULL, int status = 0);
 	
 public:
 	RowDataPtr getNextRow();
@@ -266,6 +272,8 @@ public:
 	
 private:
 	void freeResult();
+	
+	CQueryResult(CDBOpertaion* dbOpt, MYSQL_RES* result, int status);
 
 private:
     CDBOpertaion* m_dbOpt;
@@ -275,7 +283,7 @@ private:
 
     friend class CDBOpertaion;
 
-DISABLE_CONSTRUCTION_ASSIGN(CQueryResult);
+DISABLE_COPY_ASSIGN(CQueryResult);
 };
 
 
@@ -327,6 +335,7 @@ DISABLE_CONSTRUCTION_ASSIGN(CPreparedStmt);
 };
 
 
+// 注意：DB操作非线程安全！
 // 单个数据库操作，每个实例对应操作一个数据库
 class CDBOpertaion
 {
@@ -359,11 +368,17 @@ public:
 	
 public:
     // 查询数据库表，一次性获取全部查询结果集合
-    int queryTableAllResult(const char* sql, CQueryResult*& qResult);
+    int queryTableAllResult(const char* sql, CQueryResult& qResult);
+	int queryTableAllResult(const char* sql, const unsigned int len, CQueryResult& qResult);
+	
+	int queryTableAllResult(const char* sql, CQueryResult*& qResult);
 	int queryTableAllResult(const char* sql, const unsigned int len, CQueryResult*& qResult);
 
 	// 查询数据库表，需要依次获取查询结果集合
-    int queryTableResult(const char* sql, CQueryResult*& qResult);
+    int queryTableResult(const char* sql, CQueryResult& qResult);
+	int queryTableResult(const char* sql, const unsigned int len, CQueryResult& qResult);
+	
+	int queryTableResult(const char* sql, CQueryResult*& qResult);
 	int queryTableResult(const char* sql, const unsigned int len, CQueryResult*& qResult);
 	
 	// 使用完查询结果集对象后，一定记得释放该对象，否则内存泄露
@@ -371,6 +386,9 @@ public:
 
     // 一次执行多条语句
 public:
+	int executeMultiSql(const char* sql, CQueryResult& qResult);
+	int executeMultiSql(const char* sql, const unsigned int len, CQueryResult& qResult);
+	
 	int executeMultiSql(const char* sql, CQueryResult*& qResult);
 	int executeMultiSql(const char* sql, const unsigned int len, CQueryResult*& qResult);
 	
@@ -396,6 +414,13 @@ public:
 	const char* getDBName();
 	
     MYSQL* getHandler();
+	
+private:
+	// 查询数据库表，一次性获取全部查询结果集合
+	int queryTableAllResult(const char* sql, const unsigned int len, MYSQL_RES*& result);
+	
+	// 查询数据库表，需要依次获取查询结果集合
+	int queryTableResult(const char* sql, const unsigned int len, MYSQL_RES*& result);
 	
 private:
     char m_host[MaxNameLen];
