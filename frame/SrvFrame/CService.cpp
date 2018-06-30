@@ -799,6 +799,11 @@ const char* CService::getName()
 	return m_srvName;
 }
 
+unsigned short CService::getType()
+{
+	return m_srvType;
+}
+
 unsigned int CService::getId()
 {
 	return m_srvId;

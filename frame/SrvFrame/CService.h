@@ -96,6 +96,7 @@ public:
 
 public:
     const char* getName();
+	unsigned short getType();
 	unsigned int getId();
 	unsigned int getServiceId(const char* serviceName);
 	

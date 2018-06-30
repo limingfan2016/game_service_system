@@ -150,6 +150,11 @@ const char* CModule::getSrvName()
 	return m_service->getName();
 }
 
+unsigned short CModule::getSrvType()
+{
+	return m_service->getType();
+}
+
 unsigned int CModule::getSrvId()
 {
 	return m_service->getId();

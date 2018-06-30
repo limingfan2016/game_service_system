@@ -92,6 +92,7 @@ public:
 public:
     // 本服务信息
 	const char* getSrvName();
+	unsigned short getSrvType();
 	unsigned int getSrvId();
 	unsigned short getModuleId();
 	
