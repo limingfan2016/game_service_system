@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.20
  * description : TCP连接相关实现
  */
@@ -48,12 +48,14 @@ int CTcpConnect::create(int listenNum)
 		return rc;
 	}
 	
+    // 屏蔽nagle算法，否则会有延迟错误
+    // 类似场景：消息源端发送请求，等待目标端应答，但由于nagle算法目标端延迟应答，此时消息源端可能会触发超时操作流程而导致错误
 	rc = setNagle(1);
 	if (rc != Success)
 	{
 		return rc;
 	}
-	
+
 	rc = setNoBlock();
 	if (rc != Success)
 	{

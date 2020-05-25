@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.12.17
  * description : 网络连接管理socket读写数据线程
  */
@@ -46,8 +46,10 @@ public:
 	// 读写数据
 	// isRead : 为false时从连接读出的数据会被直接丢弃，不会拷贝到data调用者空间
 	static unsigned int read(Connect* conn, char* data, unsigned int len, bool isRead = true);
+
 	static bool write(CConnectManager* connMgr, Connect* conn, const char* data, int len);
 	static bool writeToSkt(CConnectManager* connMgr, Connect* conn, const char* data, const unsigned int len, int& wtLen);
+    static void writeHbRequestPkg(CConnectManager* connMgr, Connect* curConn, unsigned int curSecs);
 	static void releaseWrtBuff(CConnectManager* connMgr, Connect* conn);  // 释放申请的连接写缓冲区
 	
 private:
@@ -59,7 +61,6 @@ private:
 	bool readPkgBody(Connect* curConn, unsigned int dataSize, unsigned int& pkgLen, char* pkgData = NULL);
 
 	bool writeData(Connect* conn, const char* data, int len);
-	void writeHbRequestPkg(Connect* curConn, unsigned int curSecs);
 
     // 处理数据	
 	int handleData(Connect* msgConnList, NetPkgHeader& userPkgHeader);

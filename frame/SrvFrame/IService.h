@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.30
  * description : 服务开发接口
  */
@@ -10,6 +10,11 @@
 #include "UserType.h"
 #include "base/MacroDefine.h"
 
+
+namespace NConnect
+{
+    struct Connect;
+}
 
 namespace NFrame
 {
@@ -37,7 +42,10 @@ public:
 	int registerNetModule(CNetDataHandler* pInstance);
 
     // 停止退出服务
-    void stopService();
+    void stopService(int flag = 1);
+    
+    // 设置是否使用网关代理模式（目标服务收到网关服务的消息时，是否使用网关代理模式）
+    void setGatewayServiceMode(bool isGatewayMode);
 	
     // 开发者实现接口
 public:
@@ -46,7 +54,14 @@ public:
 	virtual void onRegister(const char* name, const unsigned int id) = 0;    // 服务启动后被调用，服务需在此注册本服务的各模块信息
 	virtual void onUpdateConfig(const char* name, const unsigned int id);    // 服务配置更新
 	virtual int onHandle();                                                  // 服务自己的处理逻辑
-	
+    
+public:
+    // 收到外部数据之后调用 onReceiveMessage
+    // 发送外部数据之前调用 onSendMessage
+    // 一般用于数据加密&解密
+    virtual int onReceiveMessage(NConnect::Connect* conn, char* msg, unsigned int& len);
+    virtual int onSendMessage(NConnect::Connect* conn, char* msg, unsigned int& len);
+
 public:
 	virtual void onClosedConnect(void* userData);                            // 通知逻辑层对应的连接已被关闭
 	virtual void onCloseConnectProxy(void* userData, int cbFlag);            // 通知逻辑层对应的逻辑连接代理已被关闭

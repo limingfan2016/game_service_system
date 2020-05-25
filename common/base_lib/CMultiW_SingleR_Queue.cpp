@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.07
  * description : 多线程写，单线程读队列，读免锁
  */

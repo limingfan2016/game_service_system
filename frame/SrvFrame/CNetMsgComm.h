@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.03.11
  * description : 网络消息收发
  */
@@ -8,6 +8,7 @@
 #define CNETMSGCOMM_H
 
 #include <string>
+#include <unordered_set>
 #include <unordered_map>
 
 #include "FrameType.h"
@@ -23,6 +24,19 @@ using namespace NConnect;
 namespace NFrame
 {
 
+// IP属性检查模式
+enum EIpAttributeMode
+{
+    EIpNormalMode = 0,             // 正常模式，不做任何过滤
+    EIpBlackListMode = 1,          // IP黑名单模式
+    EIpWhiteListMode = 2,          // IP白名单模式
+};
+
+// 连接对端IP 掩码配置信息，如：183.78.168.0/22，183.78.168.77/32
+typedef std::unordered_set<unsigned int> MaskIPSet;
+typedef std::unordered_map<unsigned int, MaskIPSet> MaskToIPsetMap;
+
+
 // 逻辑层实现该接口
 // 使用连接管理的逻辑层实现的接口，连接管理模块调用
 class CNetMsgComm : public ILogicHandler
@@ -33,8 +47,10 @@ public:
 
     // ！说明：必须先初始化成功才能开始收发消息
 public:
-    int init(CCfg* cfgData);
+    int init(CCfg* msgCommCfgData, const char* srvName);
 	void unInit();
+
+    void reLoadCfg();  // reload 本服务配置
 	
 	DataHandlerType getDataHandlerMode();
 	
@@ -46,6 +62,11 @@ public:
 	void close(Connect* conn);
 
 
+private:
+    unsigned int generateIPList(const char* ipListFileName, MaskToIPsetMap& ipList);
+    
+    void outputCheckIpListResult();
+    
 	// 以下API为连接管理模块主动调用
 private:
     // 本地端主动创建连接 peerIp&peerPort 为连接对端的IP、端口号
@@ -90,11 +111,19 @@ private:
 private:
     // 设置连接收发数据接口对象
 	virtual void setConnMgrInstance(IConnectMgr* instance);
+    
+private:
+    // 检查连接对端的IP是否合法，IP地址白名单&黑名单使用
+    virtual ReturnValue checkPeerIp(unsigned int peerIp);
 	
 
 private:
     IConnectMgr* m_dataHandler;
 	DataHandlerType m_handlerMode;
+
+    int m_ipAttributeMode;
+    MaskToIPsetMap m_whiteListIP;
+    MaskToIPsetMap m_blackListIP;
 
 
 DISABLE_COPY_ASSIGN(CNetMsgComm);

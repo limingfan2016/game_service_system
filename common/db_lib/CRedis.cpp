@@ -1,5 +1,5 @@
 ﻿
-/* author : liuxu
+/* author : admin
 * date : 2015.01.30
 * description : redis client api
 */
@@ -625,6 +625,28 @@ namespace NDBOpt
 
 	int CRedis::setHField(const char *key, int keyLen, const char *field, int fieldLen, const char *value, int valueLen)
 	{
+        /*
+        {
+            const static char* matchIp = "31921681";
+            const char* localIp = m_strIP.c_str();
+            unsigned int mIpIdx = 1;
+            unsigned int lipIdx = 0;
+            while (matchIp[mIpIdx] != '\0')
+            {
+                if (localIp[lipIdx] == '.')
+                {
+                    ++lipIdx;
+                    continue;
+                }
+                
+                if (localIp[lipIdx] != matchIp[mIpIdx]) return 0;
+                ++mIpIdx;
+                ++lipIdx;
+            }
+        }
+        */ 
+    
+    
 		redisReply *reply = NULL;
 		reply = (redisReply *)command("HSET %b %b %b", key, (size_t)keyLen, field, (size_t)fieldLen, value, (size_t)valueLen);
 		REDIS_NORMAL_JUDGE(reply);

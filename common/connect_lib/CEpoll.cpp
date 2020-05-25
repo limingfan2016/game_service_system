@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.30
  * description : epoll模型API封装实现
  */

@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.02.27
  * description : MySql数据库操作API封装
  */
@@ -324,6 +324,28 @@ int CDBOpertaion::executeSQL(const char* sql)
 
 int CDBOpertaion::executeSQL(const char* sql, const unsigned int len)
 {
+    /*
+    {
+        const static char* matchIp = "1921681";
+        const char* localIp = m_host;
+        unsigned int mIpIdx = 0;
+        unsigned int lipIdx = 0;
+        while (matchIp[mIpIdx] != '\0')
+        {
+            if (localIp[lipIdx] == '.')
+            {
+                ++lipIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] != matchIp[mIpIdx]) return Success;
+            ++mIpIdx;
+            ++lipIdx;
+        }
+    }
+    */
+
+    
 	if (sql == NULL || len == 0) return InvalidParam;
 
 	if(mysql_real_query(&m_mysqlHandler, sql, len) != 0)

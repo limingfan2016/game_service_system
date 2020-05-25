@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.10.19
  * description : 互斥锁API封装
  */

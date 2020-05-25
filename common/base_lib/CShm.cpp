@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.17
  * description : 共享内存操作，共享内存管理进程间通信实现
  */
@@ -17,6 +17,7 @@
 #include "CShm.h"
 #include "ErrorCode.h"
 #include "Constant.h"
+#include "CProcess.h"
 #include "CMessageQueue.h"
 
 
@@ -36,14 +37,14 @@ CShm::~CShm()
 }
 
 // 只读打开共享内存，以便跟踪共享内存统计数据信息
-int CShm::trace(const unsigned int srcId, const unsigned int dstId, const int size)
+int CShm::trace(const unsigned int srcId, const unsigned int dstId, const ulong64_t size)
 {
 	memset(&m_shmInfo, 0, sizeof(m_shmInfo));
 	return open(srcId, dstId, size, 0);
 }
 	
 // 打开共享内存，不存在则创建
-int CShm::open(const unsigned int srcId, const unsigned int dstId, const int size)
+int CShm::open(const unsigned int srcId, const unsigned int dstId, const ulong64_t size)
 {
 	memset(&m_shmInfo, 0, sizeof(m_shmInfo));
 	return open(srcId, dstId, size, 1);
@@ -86,11 +87,11 @@ void CShm::output()
 // isCreate默认如果不存在则创建共享内存
 // 每个进程只能调用 open&close 一次，多次操作将返回失败
 // 在进程1打开一个和进程2通信的共享内存：open(1, 2, 10240 * 1024)
-int CShm::open(const unsigned int srcId, const unsigned int dstId, const int size, const int isCreate)
+int CShm::open(const unsigned int srcId, const unsigned int dstId, const ulong64_t size, const int isCreate)
 {
     if (srcId == dstId || size <= 0)  // 参数校验
     {
-        ReleaseErrorLog("open shm logic process id equal or size invalid, srcId = %d, dstId = %d, size = %d", srcId, dstId, size);
+        ReleaseErrorLog("open shm logic process id equal or size invalid, srcId = %d, dstId = %d, size = %llu", srcId, dstId, size);
         return ShmProcIdEqual;
     }
 	
@@ -132,7 +133,7 @@ int CShm::open(const unsigned int srcId, const unsigned int dstId, const int siz
     }
 	
 	// 创建共享内存
-	int shmSize = sizeof(ShmHeader) + size * SIDE_COUNT;  // 申请的共享内存总大小
+	ulong64_t shmSize = sizeof(ShmHeader) + size * SIDE_COUNT;  // 申请的共享内存总大小
 	int isNewCreate = 0;
 	int shmId = -1;
 	char* pShm = NULL;
@@ -158,7 +159,7 @@ int CShm::open(const unsigned int srcId, const unsigned int dstId, const int siz
 		
 		m_shmInfo.queue[idx1] = pShm + sizeof(ShmHeader);         // 队列1开始地址
 	    m_shmInfo.queue[idx2] = m_shmInfo.queue[idx1] + size;     // 队列2开始地址
-		ReleaseInfoLog("create shm size = %d", size);
+		ReleaseInfoLog("create shm size = %llu", size);
 	}
     else
 	{
@@ -176,7 +177,7 @@ int CShm::open(const unsigned int srcId, const unsigned int dstId, const int siz
 		
 		m_shmInfo.queue[idx1] = pShm + sizeof(ShmHeader);         // 队列1开始地址
 	    m_shmInfo.queue[idx2] = m_shmInfo.queue[idx1] + m_shmInfo.shmHeader->queue[idx1].size;  // 队列2开始地址
-		ReleaseInfoLog("get shm size = %d", size);
+		ReleaseInfoLog("get shm size = %llu", size);
 	}
 
     // 读写端的队列索引
@@ -191,7 +192,7 @@ int CShm::open(const unsigned int srcId, const unsigned int dstId, const int siz
 		m_shmInfo.readQueue = idx1;
 	}
 	
-	ReleaseInfoLog("open shm, pid = %d, create = %d, size = %d, srcProcessId = %d, dstProcessId = %d, key file = %s, key = 0x%x, shmId = %d.",
+	ReleaseInfoLog("open shm, pid = %d, create = %d, size = %llu, srcProcessId = %d, dstProcessId = %d, key file = %s, key = 0x%x, shmId = %d.",
 	                getpid(), isCreate, size, srcId, dstId, shmKeyFile, shmKey, shmId);
 	output();
 
@@ -252,15 +253,19 @@ int CSharedMemory::getKey(const char* keyFile)
 		if (ENOENT == errno)  // 不存在则创建
 		{
 			char cmd[MaxFullLen * SIDE_COUNT] = {0};
-			snprintf(cmd, sizeof(cmd), "mkdir -p %s", keyFile);
+			snprintf(cmd, sizeof(cmd) - 1, "mkdir -p %s", keyFile);
 			*strrchr(cmd, '/') = 0;
-			system(cmd);   // 创建目录
-			snprintf(cmd, sizeof(cmd), "touch %s", keyFile);   
-			system(cmd);   // 创建空白文件
-			if (stat(keyFile, &fInfo) == 0)
-			{
-				key = fInfo.st_ino;
-			}
+			if (CProcess::doCommand(cmd) == Success)  // 创建目录
+            {
+                snprintf(cmd, sizeof(cmd) - 1, "touch %s", keyFile);   
+                if (CProcess::doCommand(cmd) == Success)  // 创建空白文件
+                {
+                    if (stat(keyFile, &fInfo) == 0)
+                    {
+                        key = fInfo.st_ino;
+                    }
+                }
+            }
 		}
 	}
 	else
@@ -320,7 +325,7 @@ int CSharedMemory::unLockFile(int fd, int lockPos)
 	return Success;
 }
 
-int CSharedMemory::create(int key, int size, int flag, int& isCreate, int& shmId, char*& pShm)
+int CSharedMemory::create(int key, ulong64_t size, int flag, int& isCreate, int& shmId, char*& pShm)
 {
 	isCreate = 0;
 	shmId = -1;
@@ -339,7 +344,7 @@ int CSharedMemory::create(int key, int size, int flag, int& isCreate, int& shmId
 		shmId = ::shmget(key, 0, flag);  // key对应的共享内存已经存在
 		if (shmId < 0)
 		{
-			ReleaseErrorLog("get shm failed, key = %d, size = %d, flag = %d, erron = %d, info = %s",
+			ReleaseErrorLog("get shm failed, key = %d, size = %llu, flag = %d, erron = %d, info = %s",
 			                key, size, flag, errno, strerror(errno));
 			return CreateShmFailed;
 		}
@@ -357,7 +362,7 @@ int CSharedMemory::create(int key, int size, int flag, int& isCreate, int& shmId
 	struct shmid_ds shmStat ;
 	if (::shmctl(shmId, IPC_STAT, &shmStat) == 0)
 	{
-		ReleaseInfoLog("get shm size = %d, and user input size = %d", (int)shmStat.shm_segsz, size);
+		ReleaseInfoLog("get shm size = %llu, and user input size = %llu", shmStat.shm_segsz, size);
 	}
 	
 	return Success;

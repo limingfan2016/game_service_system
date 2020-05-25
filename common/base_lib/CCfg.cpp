@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.10.27
  * description : 配置文件解析读取配置项
  */
@@ -299,6 +299,11 @@ ConfigData* CCfg::getCurCfgData(const char* data, bool& isSection)
 	}
 	
 	return m_curCfgData;
+}
+
+const char* CCfg::getFileName() const
+{
+    return m_fileName;
 }
 
 void CCfg::reLoad()

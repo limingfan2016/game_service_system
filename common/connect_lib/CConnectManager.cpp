@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.12.05
  * description : 网络连接管理
  */
@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/epoll.h>
+#include <sys/time.h>
 #include <vector>
 
 #include "CConnectManager.h"
@@ -39,11 +40,14 @@ static void SignalHandler(int sigNum, siginfo_t* sigInfo, void* context)
 }
 
 
+static strIP_t tcpIp = {0};
+const char* CConnectManager::getTcpIp() {return tcpIp;}
+
 CConnectManager::CConnectManager(const char* ip, const int port, ILogicHandler* logicHandler) : m_tcpListener(ip, port), m_logicHandler(logicHandler)
 {
 	m_loginConnectList = NULL;
 	m_msgConnectList = NULL;
-	m_lastCheckTime = 0;
+	m_nextCheckTime = 0;
 	
 	m_memForRead = NULL;
 	m_memForWrite = NULL;
@@ -51,13 +55,19 @@ CConnectManager::CConnectManager(const char* ip, const int port, ILogicHandler* 
 	m_connId = 0;
 	
 	m_listenNum = 0;
+    m_maxMsgSize = 0;
 	m_hbInterval = 0;           // 心跳检测间隔时间，单位秒
 	m_hbFailedTimes = 0;        // 心跳检测连续失败hbFailedTimes次后关闭连接
+    m_checkConnectInterval = 0;  // 遍历所有连接时间间隔（检查连接活跃时间、心跳信息），单位毫秒
 	m_activeInterval = 0;       // 活跃检测间隔时间，单位秒
 	m_checkTimes = 0;           // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	
 	m_status = 0;
 	m_synNotify.status = parallel;
+    
+    {
+        strncpy(tcpIp, ip, StrIPLen - 1);
+    }
 }
 
 CConnectManager::~CConnectManager()
@@ -83,13 +93,13 @@ int CConnectManager::doStart(const ServerCfgData& cfgData)
 {
 	const unsigned int minSize = 1024;  // 缓冲区最小长度
 	
-	ReleaseInfoLog("server start memory pool count = %d, step = %d, size = %d, minSize = %d, listenNum = %d, hbInterval = %d, hbFailedTimes = %d, checkTimes = %d, activeInterval = %d, connect object cache = %d.",
-	cfgData.count, cfgData.step, cfgData.size, minSize, cfgData.listenNum,
-    cfgData.hbInterval, cfgData.hbFailedTimes, cfgData.checkTimes, cfgData.activeInterval, cfgData.listenMemCache);
+	ReleaseInfoLog("server start memory pool count = %d, step = %d, size = %d, minSize = %d, listenNum = %d, maxMsgSize = %u, checkConnectInterval = %u, hbInterval = %d, hbFailedTimes = %d, checkTimes = %d, activeInterval = %d, connect object cache = %d.",
+	cfgData.count, cfgData.step, cfgData.size, minSize, cfgData.listenNum, cfgData.maxMsgSize,
+    cfgData.checkConnectInterval, cfgData.hbInterval, cfgData.hbFailedTimes, cfgData.checkTimes, cfgData.activeInterval, cfgData.listenMemCache);
 	
 	// 参数合法性检查
-	if (m_logicHandler == NULL || cfgData.listenMemCache <= 1 || cfgData.count <= 1 || cfgData.step <= 1 || cfgData.size < minSize
-	    || cfgData.listenNum <= 1 || cfgData.hbInterval <= 1 || cfgData.hbFailedTimes < 1 || cfgData.activeInterval <= 1 || cfgData.checkTimes <= 1) return InvalidParam;
+	if (m_logicHandler == NULL || cfgData.listenMemCache <= 1 || cfgData.count <= 1 || cfgData.step <= 1 || cfgData.size < minSize || cfgData.listenNum <= 1
+        || cfgData.maxMsgSize <= 1 || cfgData.checkConnectInterval <= 1 || cfgData.hbInterval <= 1 || cfgData.hbFailedTimes < 1 || cfgData.activeInterval <= 1) return InvalidParam;
 	
     NEW(m_connMemory, CMemManager(cfgData.listenMemCache, cfgData.listenMemCache, sizeof(Connect)));  // 创建连接使用的内存池
 	if (m_connMemory == NULL) return CreateMemPoolFailed;
@@ -109,8 +119,10 @@ int CConnectManager::doStart(const ServerCfgData& cfgData)
 	}
 
 	m_listenNum = cfgData.listenNum;
+    m_maxMsgSize = cfgData.maxMsgSize;
 	m_hbInterval = cfgData.hbInterval;
 	m_hbFailedTimes = cfgData.hbFailedTimes;
+    m_checkConnectInterval = cfgData.checkConnectInterval;
 	m_activeInterval = cfgData.activeInterval;
 	m_checkTimes = cfgData.checkTimes;
 	ReleaseInfoLog("server start success.");
@@ -175,8 +187,7 @@ int CConnectManager::run(const int connectCount, const int waitTimeout, DataHand
 	CProcess::installSignal(SIGPIPE, NConnect::SignalHandler);
 	
 	ReleaseInfoLog("Tcp epoll server [ip = %s, port = %d, pid = %d] running ...\n", m_tcpListener.getIp(), m_tcpListener.getPort(), getpid());
-	
-	m_lastCheckTime = time(NULL);                // 检测连接的时间点
+
 	const int maxEvents = 8192;                  // 最大监听事件个数
     struct epoll_event waitEvents[maxEvents];    // 监听epoll事件数组
 	int fdCount = -1;
@@ -230,7 +241,12 @@ int CConnectManager::run(const int connectCount, const int waitTimeout, DataHand
 // 停止连接管理服务
 void CConnectManager::stop()
 {
-	m_status = 0;
+    m_status = 0;
+    
+    // 外部线程调用 stop() 停止连接线程，此时必须唤醒连接线程，等待连接线程处理完
+    // 否则如果这个时候连接线程正好进入等待状态则导致死锁，无法退出
+    // handleConnect() 中的 SynWaitNotify sysWaitNotifyHepler(this); 调用 导致连接线程挂起自己等待
+    waitConnecter();
 }
 
 
@@ -243,8 +259,10 @@ bool CConnectManager::isRunning()
 void CConnectManager::clear()
 {
 	m_listenNum = 0;
+    m_maxMsgSize = 0;
 	m_hbInterval = 0;         // 心跳检测间隔时间，单位秒
 	m_hbFailedTimes = 0;      // 心跳检测连续失败hbFailedTimes次后关闭连接
+    m_checkConnectInterval = 0;  // 遍历所有连接时间间隔（检查连接活跃时间、心跳信息），单位毫秒
 	m_activeInterval = 0;     // 活跃检测间隔时间，单位秒
 	m_checkTimes = 0;         // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	m_status = 0;
@@ -283,7 +301,7 @@ void CConnectManager::clearAllConnect()
 	m_connectMap.clear();	
 	m_loginConnectList = NULL;
 	m_msgConnectList = NULL;
-	m_lastCheckTime = 0;
+    m_nextCheckTime = 0;
 }
 
 // 重新建立监听
@@ -328,6 +346,7 @@ void CConnectManager::acceptConnect(uint32_t eventVal, Connect* listenConn)
 		int fd = -1;
 		struct in_addr peerIp;
 		unsigned short peerPort = 0;
+        int checkIpResult = -1;
 		int errorCode = Success;
 		while (isRunning())
 		{
@@ -336,15 +355,41 @@ void CConnectManager::acceptConnect(uint32_t eventVal, Connect* listenConn)
 				if (errorCode == EINTR)  continue; // 被信号中断则继续
 				break;  // 其他情况则退出
 			}
+            
+            checkIpResult = m_logicHandler->checkPeerIp(peerIp.s_addr);
+            if (checkIpResult != ReturnValue::OptSuccess)
+            {
+                // 这里需要发送控制包给连接对端，告知非法IP地址后再关闭连接
+                // 黑名单、白名单限制控制包
+                errno = 0;
+                const uchar8_t cmd = (ReturnValue::PeerIpInBlackList == checkIpResult) ? CtlFlag::BLACK_LIMIT : CtlFlag::WHITE_LIMIT;
+                const unsigned int netPkgHeaderLen = sizeof(NetPkgHeader);
+                const NetPkgHeader limitPkgHeader(htonl(netPkgHeaderLen), NetPkgType::CTL, cmd);
+                const int nWrite = ::write(fd, (const char*)&limitPkgHeader, netPkgHeaderLen);
 
-            if (m_tcpListener.setNoBlock(fd) != Success) break;  // 设置非阻塞
+                if (::close(fd) != 0) ReleaseErrorLog("check accept ip invalid and close new connect fd = %d, error = %d, info = %s", fd, errno, strerror(errno));  // 失败则关闭连接
+                ReleaseErrorLog("check accept peer ip invalid and close, fd = %d, cmd = %d, nWrite = %d, error = %d, ip = %s, port = %d, result = %d",
+                fd, cmd, nWrite, errno, CSocket::toIPStr(peerIp), peerPort, checkIpResult);
+
+                continue;
+            }
+
+            // 设置非阻塞
+            if (m_tcpListener.setNoBlock(fd) != Success)
+            {
+                if (::close(fd) != 0) ReleaseErrorLog("set no block error and close new connect fd = %d, error = %d, info = %s", fd, errno, strerror(errno));  // 失败则关闭连接
+                ReleaseErrorLog("set no block error and close, fd = %d, ip = %s, port = %d", fd, CSocket::toIPStr(peerIp), peerPort);
+
+                continue;
+            }
 			
 			newConn = createConnect(fd, peerIp, peerPort);  // 创建被动连接信息数据
 			if (newConn == NULL)
 			{
-				if (::close(fd) != 0) ReleaseWarnLog("close new accept connect fd = %d, error = %d, info = %s", fd, errno, strerror(errno));  // 失败则关闭连接
-				ReleaseErrorLog("create new accept connect failed, fd = %d, ip = %s, port = %d", fd, CSocket::toIPStr(peerIp), peerPort);
-				break;
+				if (::close(fd) != 0) ReleaseErrorLog("create connect info error and close new connect fd = %d, error = %d, info = %s", fd, errno, strerror(errno));  // 失败则关闭连接
+				ReleaseErrorLog("create new accept connect error, fd = %d, ip = %s, port = %d", fd, CSocket::toIPStr(peerIp), peerPort);
+				
+                continue;
 			}
 
 			// 回调通知逻辑层接收创建新连接成功
@@ -593,24 +638,17 @@ void CConnectManager::addInitedConnect(Connect* conn)
 	
 	m_connectMap[conn->id] = conn;
 	
-	ReleaseInfoLog("init message connect, ip = %s, port = %d, id = %lld\n", CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->id);
+	ReleaseInfoLog("init message connect, ip = %s, port = %d, fd = %d, id = %lld, address = %p\n", CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->fd, conn->id, conn);
 }
 
 void CConnectManager::addToMsgQueue(Connect* conn, const ConnectOpt opt)
 {
-	if (conn->readSocketTimes > 0)
+	if (conn->checkSocketTimes > 0)
 	{
-		if (opt == ConnectOpt::EAddToQueue) conn->readSocketTimes = 1;  // 已经在队列中了，则重新开始计算即可
+		if (opt == ConnectOpt::EAddToQueue) conn->checkSocketTimes = 1;  // 已经在队列中了，则重新开始计算即可
 		return;
 	}
 
-	// readSocketTimes的值为 1 则表示该连接加入消息队列
-	// 值为 0 则表示已经被移出消息队列
-	// 此时重新收到数据，则先把该值设置为 (m_checkTimes + 1)
-	// 应用层读取数据，解析后的如果数据是应用层消息，则再把该连接的readSocketTimes值重置为1即可，表示正常加入消息队列
-	// 解析后如果只是控制类消息包，如心跳消息则不会重置readSocketTimes的值，不会重置活跃时间等
-	conn->readSocketTimes = (opt == ConnectOpt::EAddToQueue) ? 1 : (m_checkTimes + 1);
-	
 	// 加入消息队列
 	if (m_msgConnectList != NULL)
 	{
@@ -625,13 +663,23 @@ void CConnectManager::addToMsgQueue(Connect* conn, const ConnectOpt opt)
 		conn->pPre = NULL;
 		m_msgConnectList = conn;
 	}
+    
+    // checkSocketTimes 的值为 1 则表示该连接加入消息队列
+	// 值为 0 则表示已经被移出消息队列
+	// 此时重新收到数据，则先把该值设置为 (m_checkTimes + 1)
+	// 应用层读取数据，解析后的如果数据是应用层消息，则再把该连接的 checkSocketTimes 值重置为1即可，表示正常加入消息队列
+	// 解析后如果只是控制类消息包，如心跳消息则不会重置 checkSocketTimes 的值，不会重置活跃时间等
+    // 业务线程收消息和网络线程接收消息并发导致 m_msgConnectList 为NULL错误，并发导致业务线程持有无效的连接 m_curConn 已经被删除了
+    // m_curConn = (m_curConn->pNext != NULL) ? m_curConn->pNext : m_connMgr->getMsgConnectList();
+    // 因此必须先 m_msgConnectList = conn; 再 conn->checkSocketTimes 赋值，否则出现没有挂接队列即读取消息错误 m_msgConnectList 返回 NULL
+	conn->checkSocketTimes = (opt == ConnectOpt::EAddToQueue) ? 1 : (m_checkTimes + 1);
 }
 
 void CConnectManager::removeFromMsgQueue(Connect* conn)
 {
-	if (conn->readSocketTimes > 0)
+	if (conn->checkSocketTimes > 0)
 	{
-		conn->readSocketTimes = 0;              // 值为 0 表示该连接已经从消息队列删除
+		conn->checkSocketTimes = 0;              // 值为 0 表示该连接已经从消息队列删除
 		removeConnect(m_msgConnectList, conn);  // 从队列删除
 	}
 }
@@ -676,7 +724,7 @@ Connect* CConnectManager::createConnect(const int fd, const struct in_addr& peer
 		return NULL;
 	}
 	
-	ReleaseInfoLog("create connect, ip = %s, port = %d, fd = %d", CSocket::toIPStr(newConn->peerIp), newConn->peerPort, newConn->fd);
+	ReleaseInfoLog("create connect, ip = %s, port = %d, fd = %d, address = %p", CSocket::toIPStr(newConn->peerIp), newConn->peerPort, newConn->fd, newConn);
 
 	return newConn;
 }
@@ -686,7 +734,8 @@ void CConnectManager::handleConnect(uint32_t eventVal, Connect* conn)
 {
 	if (eventVal & (EPOLLERR | EPOLLHUP | EPOLLRDHUP))   // 连接异常，需要关闭此类连接
 	{
-		ReleaseWarnLog("ready close error connect, peer ip = %s, port = %d, id = %lld", CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->id);
+		ReleaseWarnLog("ready close error connect, peer ip = %s, port = %d, id = %lld, event = %u",
+        CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->id, eventVal);
 		
 		if (eventVal & EPOLLIN) readFromConnect(conn);   // 存在连接有数据可读的情况则先读最后的数据
 		conn->connStatus = closed;  // 关闭该连接
@@ -703,30 +752,42 @@ void CConnectManager::handleConnect(uint32_t eventVal, Connect* conn)
 // 处理所有连接（心跳检测，活跃检测，删除异常连接等等）
 void CConnectManager::handleConnect()
 {
-	unsigned int curSecs = time(NULL);       // 系统当前时间
-	if (curSecs == m_lastCheckTime) return;  // 默认每秒检测一次
-	
-	// 检测所有连接	
-	m_lastCheckTime = curSecs;
+    // 检查时间点，单位毫秒
+    const unsigned int MillisecondUnit = 1000;
+    struct timeval nowTime;
+    gettimeofday(&nowTime, NULL);
+    const unsigned long long checkMilliseconds = (nowTime.tv_sec * MillisecondUnit + nowTime.tv_usec / MillisecondUnit);  // 当前时间点转换为毫秒
+    if (checkMilliseconds < m_nextCheckTime) return;
+
+	// 检测所有连接
+	m_nextCheckTime = checkMilliseconds + m_checkConnectInterval;
 	bool isEraseConnect = false;
 	Connect* msgConn = NULL;
+    int checkIpResult = -1;
+    
+    // 必须在加锁等待数据线程之前检查是否已经停止连接线程了，否则如果外部线程已经调用过 stop() 退出，将导致连接线程无法被唤醒而死锁等待
+    if (!isRunning()) return;
+    
+    // 优先让数据处理线程处理上层数据
+    // 等待数据处理线程处理完
+    // 连接线程处理完毕会自动通知数据处理线程执行处理操作
+    // 这里获取到执行权之后一次性遍历处理完所有连接，如果只有在移除连接出队列时再加锁等待会导致CPU长时间消耗在等待加锁解锁上（高CPU占用）
+    SynWaitNotify sysWaitNotifyHepler(this);
+
 	for (IdToConnect::iterator it = m_connectMap.begin(); it != m_connectMap.end();)
 	{
 		isEraseConnect = false;
 		msgConn = it->second;
-		
+
 		// 关闭异常的连接
 		if (msgConn->logicStatus != normal)
 		{
 			closeConnect(msgConn);
 			if (msgConn->logicStatus == deleted && msgConn->writeBuff == NULL)
 			{
-				ReleaseWarnLog("destory message connect, peer ip = %s, port = %d, id = %lld, connStatus = %d, logicStatus = %d\n",
-				               CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, msgConn->connStatus, msgConn->logicStatus);
-					   
-				// 等待数据处理线程处理完
-				// 连接线程处理完毕会自动通知数据处理线程执行处理操作
-				SynWaitNotify sysWaitNotifyHepler(this);
+				ReleaseWarnLog("destory message connect, peer ip = %s, port = %d, id = %lld, connStatus = %d, logicStatus = %d, address = %p\n",
+				               CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, msgConn->connStatus, msgConn->logicStatus, msgConn);
+
 				isEraseConnect = true;
 				m_connectMap.erase(it++);
 		        destroyMsgConnect(msgConn);  // 删除异常的连接	
@@ -735,31 +796,48 @@ void CConnectManager::handleConnect()
 		
 		else if (msgConn->connStatus == normal)
 		{
-			if (CDataHandler::getCanWriteDataSize(msgConn) > 0 && msgConn->canWrite) writeToConnect(msgConn);  // 存在数据可写往socket
+            // IP地址合法性验证（白名单&黑名单验证）
+            checkIpResult = m_logicHandler->checkPeerIp(msgConn->peerIp.s_addr);
+            if (checkIpResult != ReturnValue::OptSuccess)
+            {
+                ReleaseErrorLog("check peer ip invalid and close message connect, ip = %s, port = %d, id = %lld, connStatus = %d, logicStatus = %d, address = %p, result = %d",
+                CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, msgConn->connStatus, msgConn->logicStatus, msgConn, checkIpResult);
+                
+                closeConnect(msgConn);
+                
+                ++it;
+                continue;
+            }
+        
+			if (msgConn->canWrite && CDataHandler::getCanWriteDataSize(msgConn) > 0) writeToConnect(msgConn);  // 存在数据可写往socket
 			
 			// 心跳检测，活跃检测，检测失败或者超时则关闭连接
-			if ((msgConn->hbResult >= m_hbFailedTimes) || ((int)(curSecs - msgConn->activeSecs) > m_activeInterval))
+			if ((msgConn->hbResult >= m_hbFailedTimes) || ((nowTime.tv_sec - msgConn->activeSecs) > m_activeInterval))
 			{
 				unsigned short hbResult = msgConn->hbResult;
 				unsigned short cfgHbTimes = m_hbFailedTimes;
 				ReleaseWarnLog("close not active connect, ip = %s, port = %d, logicId = %lld, hbFailedTimes = %d, config hb times = %d, no active time = %d, config active interval = %d\n",
-				CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, hbResult, cfgHbTimes, curSecs - msgConn->activeSecs, m_activeInterval);
+				CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, hbResult, cfgHbTimes, nowTime.tv_sec - msgConn->activeSecs, m_activeInterval);
 				closeConnect(msgConn);
 			}
-			else if (msgConn->readSocketTimes > 0 && CDataHandler::getCanReadDataSize(msgConn) == 0)
+			else if (CDataHandler::getCanReadDataSize(msgConn) == 0)
 			{
-				// 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
-				if (msgConn->readSocketTimes > m_checkTimes)
+				// 检查socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
+				if (msgConn->checkSocketTimes > m_checkTimes)
 				{
-					// ReleaseWarnLog("remove connect from message queue, ip = %s, port = %d, logicId = %lld, check times = %d",
-					// CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, m_checkTimes);
-					
-					SynWaitNotify sysWaitNotifyHepler(this);
+					// ReleaseWarnLog("remove connect from message queue, ip = %s, port = %d, logicId = %lld, check times = %d, rdTimes = %u",
+					// CSocket::toIPStr(msgConn->peerIp), msgConn->peerPort, msgConn->id, m_checkTimes, msgConn->checkSocketTimes);
+
 					removeFromMsgQueue(msgConn);  // 从消息队列删除
 				}
-				else
+                else if (msgConn->checkSocketTimes == 0)
+                {
+                    // 无消息数据的连接，则发送心跳请求
+                    CDataHandler::writeHbRequestPkg(this, msgConn, nowTime.tv_sec);
+                }
+				else // (msgConn->checkSocketTimes > 0)
 				{
-			        ++msgConn->readSocketTimes;
+			        ++msgConn->checkSocketTimes;
 				}
 			}
 		}
@@ -777,8 +855,8 @@ void CConnectManager::closeConnect(Connect* conn)
 		
 		m_epoll.removeListener(conn->fd);  // 从epoll模型删除监听事件
 
-        ReleaseWarnLog("close connect, peer ip = %s, port = %d, id = %lld, connStatus = %d, logicStatus = %d",
-		CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->id, conn->connStatus, conn->logicStatus);
+        ReleaseWarnLog("close connect, peer ip = %s, port = %d, id = %lld, connStatus = %d, logicStatus = %d, address = %p",
+		CSocket::toIPStr(conn->peerIp), conn->peerPort, conn->id, conn->connStatus, conn->logicStatus, conn);
 		
         // 关闭连接
 		if (::close(conn->fd) != 0) ReleaseWarnLog("close connect fd = %d, error = %d, info = %s", conn->fd, errno, strerror(errno));
@@ -791,7 +869,7 @@ void CConnectManager::closeConnect(Connect* conn)
 		if (conn->id != 0) m_logicHandler->onClosedConnect(conn, conn->userCb);  // 通知逻辑层connLogicId对应的连接已被关闭
 		
 		if (conn->writeBuff != NULL) addToMsgQueue(conn, ConnectOpt::EAddToQueue);  // 有资源没释放要加回消息队列等待数据处理线程释放资源，之后才能销毁连接
-		else if (conn->readSocketTimes == 0) conn->logicStatus = deleted;
+		else if (conn->checkSocketTimes == 0) conn->logicStatus = deleted;
 	}
 }
 
@@ -799,19 +877,16 @@ void CConnectManager::removeConnect(Connect*& listHeader, Connect* conn)
 {
 	if (conn != listHeader)        // 非头结点
 	{
-		conn->pPre->pNext = conn->pNext;
-		if (conn->pNext != NULL)           // 非尾结点
-		{
-			conn->pNext->pPre = conn->pPre;
-		}
+        // 此处如果 conn 不是 listHeader 中的节点则错误，因此需要做判空处理
+        // 判空处理实际上也可能导致问题一直隐藏
+        if (conn->pPre != NULL) conn->pPre->pNext = conn->pNext;
+
+		if (conn->pNext != NULL) conn->pNext->pPre = conn->pPre;  // 非尾结点
 	}
 	else
 	{
 		listHeader = conn->pNext;  // 头结点
-		if (listHeader != NULL)    // 非尾结点
-		{
-			listHeader->pPre = NULL;
-		}
+		if (listHeader != NULL) listHeader->pPre = NULL;  // 非尾结点
 	}
 	
 	conn->pNext = NULL;
@@ -841,6 +916,8 @@ void CConnectManager::destroyConnect(Connect* conn)
 	}
 
 	// 3)最后释放连接数据对象内存块
+    conn->checkSocketTimes = 0;
+    conn->logicStatus = ConnectStatus::deleted;
 	m_connMemory->put((char*)conn);
 }
 
@@ -1127,6 +1204,7 @@ bool CConnectManager::waitConnecter()
 void CConnectManager::waitDataHandler()
 {
 	// 挂起连接线程，等待数据处理线程
+    // 优先让数据处理线程处理上层数据
 	m_synNotify.waitDataHandlerMutex.lock();
 	m_synNotify.status = waitDH;
 	while (m_synNotify.status == waitDH) m_synNotify.waitDataHandlerCond.wait(m_synNotify.waitDataHandlerMutex);  // 等待数据处理线程，挂起自己

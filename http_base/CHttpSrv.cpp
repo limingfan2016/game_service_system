@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.07.01
  * description : Http 服务简单实现
  */
@@ -162,8 +162,8 @@ bool CHttpDataHandler::doHttpConnect(const char* ip, unsigned int port, const ch
 	}
 
     bool isOK = m_httpConnectMgr.doHttpConnect(ip, port, cd);
-	OptInfoLog("do http connect, cd = %p, result = %d, fd = %d, userData = %s, request id = %u, message len = %u, content = %s",
-	cd, isOK, cd->fd, cd->keyData.key, requestId, cd->sendDataLen, cd->sendData);
+	OptInfoLog("do http connect,ip = %s, port = %u, cd = %p, result = %d, fd = %d, userData = %s, request id = %u, message len = %u, content = %s",
+	ip, port, cd, isOK, cd->fd, cd->keyData.key, requestId, cd->sendDataLen, cd->sendData);
 	
 	if (isOK)
 	{
@@ -404,6 +404,21 @@ void CHttpDataHandler::registerPostOptHandler(const string& url, HttpPostOptHand
 void CHttpDataHandler::registerHttpReplyHandler(unsigned int requestId, HttpReplyHandler handler, CHandler* instance)
 {
 	m_httpReplyHandlerInfo[requestId] = HttpReplyHandlerObject(instance, handler);
+}
+
+void CHttpDataHandler::clearGetOptHandler()
+{
+	m_httpGetOptHandlerInfo.clear();
+}
+
+void CHttpDataHandler::clearPostOptHandler()
+{
+	m_httpPostOptHandlerInfo.clear();
+}
+
+void CHttpDataHandler::clearHttpReplyHandler()
+{
+	m_httpReplyHandlerInfo.clear();
 }
 
 // 通知逻辑层对应的逻辑连接已被关闭

@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.12.03
  * description : 对象自动管理，引用计数
  */

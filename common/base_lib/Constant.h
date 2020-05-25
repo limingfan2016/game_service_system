@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.10.15
  * description : 各种常量定义，配置值等等
  */

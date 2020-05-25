@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.10.28
  * description : 提供各种日志输出、日志管理功能
  */
@@ -17,10 +17,39 @@ namespace NCommon
 {
 
 enum LogLevel {
-	Info = 0,
-	Warn = 1,
-	Error = 2,
+	Info = 2,
+	Warn = 3,
+	Error = 4,
+    Business = 5,
+    Dev = 6,
+    Test = 7,
+    Product = 8,
 };
+
+/* 调试日志
+日志级别开关配置说明：
+enum LogLevel {
+	Info = 2,
+	Warn = 3,
+	Error = 4,
+    Business = 5,
+    Dev = 6,
+    Test = 7,
+    Product = 8,
+};
+
+各服务配置文件 common.cfg 里的 [Logger] 配置项：
+[Logger]
+WriteDebugLog = 0       // 0值关闭日志
+WriteDebugLog = 1       // 1值打开所有级别的日志
+
+// 打开相关级别的日志，各级别对应的值 LogLevel 任意组合，如下配置：
+WriteDebugLog = 2       // 只打开 Info 级别日志
+WriteDebugLog = 45      // 只打开 Error、Business 级别日志
+WriteDebugLog = 34      // 只打开 Warn、Error 级别日志
+WriteDebugLog = 478     // 只打开 Error、Test、Product 级别日志
+*/
+
 
 class CLogger
 {
@@ -35,7 +64,7 @@ public:
 	
 public:
 	int writeFile(const char* fileName, const int fileLine, const LogLevel logLv, const char* pFormat, ...);
-	void setOutput(int v);
+	void setOutput(int value);
 	
 private:
 	void setFileName(const char* pFullName);

@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.03.27
  * description : 游戏逻辑开发框架API
  */
@@ -34,30 +34,30 @@ int CGameModule::onClientMessage(const char* msgData, const unsigned int msgLen,
 {
     if (protocolId >= MaxProtocolIDCount)
 	{
-		ReleaseErrorLog("receive net client msg error, protocolId = %d", protocolId);
+		ReleaseErrorLog("receive net client msg error, serviceId = %u, protocolId = %d", serviceId, protocolId);
 		return InvalidParam;
 	}
 
 	ProtocolIdToHandler::const_iterator handlerIt = m_clientProtocolHanders->find(protocolId);
 	if (handlerIt == m_clientProtocolHanders->end() || handlerIt->second.handler == NULL)
 	{
-		ReleaseErrorLog("not find the protocol handler for net client msg, protocolId = %d", protocolId);
+		ReleaseErrorLog("not find the protocol handler for net client msg, serviceId = %u, protocolId = %d", serviceId, protocolId);
 		return NoFoundProtocolHandler;
 	}
 	
 	// 填写消息上下文信息
+    m_context.msgId = msgId;
 	m_netClientContext.serviceId = serviceId;
 	m_netClientContext.moduleId = moduleId;
 	m_netClientContext.protocolId = protocolId;
-	m_netClientContext.msgId = msgId;
 	m_netClientContext.conn = conn;
 	
 	// 业务逻辑处理消息
 	m_msgType = MessageType::NetClientMsg;
 	(handlerIt->second.instance->*(handlerIt->second.handler))(msgData, msgLen, serviceId, moduleId, protocolId);
 
+    m_context.msgId = 0;
 	m_netClientContext.protocolId = (unsigned short)-1;
-	m_netClientContext.msgId = (unsigned int)-1;
 	m_netClientContext.conn = NULL;
 	
 	return Success;
@@ -80,14 +80,15 @@ Connect* CGameModule::setContextConnect(Connect* newConn)
 // 向目标网络客户端发送消息
 int CGameModule::sendMsgToClient(const char* msgData, const unsigned int msgLen, unsigned short protocolId, unsigned int serviceId, unsigned short moduleId)
 {
-	int rc = m_service->sendMsgToClient(msgData, msgLen, m_netClientContext.msgId, serviceId, moduleId, protocolId, m_netClientContext.conn);
+	int rc = m_service->sendMsgToClient(msgData, msgLen, m_context.msgId, serviceId, moduleId, protocolId, m_netClientContext.conn);
 	if (rc != Success) ReleaseErrorLog("send client message error1, msgLen = %u, serviceId = %d, moduleId = %d, protocolId = %d, rc = %d", msgLen, serviceId, moduleId, protocolId, rc);
 	return rc;
 }
 
 int CGameModule::sendMsgToClient(const char* msgData, const unsigned int msgLen, unsigned short protocolId,
 					             const char* userName, unsigned int serviceId, unsigned short moduleId, unsigned int msgId)
-{	
+{
+    if (msgId == 0) msgId = m_context.msgId;
     int rc = (userName != NULL) ? m_service->sendMsgToClient(msgData, msgLen, msgId, serviceId, moduleId, protocolId, getConnect(userName)) : InvalidParam;
 	if (rc != Success) ReleaseErrorLog("send client message error2, msgLen = %u, serviceId = %d, moduleId = %d, protocolId = %d, rc = %d, userName = %s",
 	msgLen, serviceId, moduleId, protocolId, rc, (userName != NULL) ? userName : "");
@@ -97,6 +98,7 @@ int CGameModule::sendMsgToClient(const char* msgData, const unsigned int msgLen,
 int CGameModule::sendMsgToClient(const char* msgData, const unsigned int msgLen, unsigned short protocolId,
 	                             Connect* conn, unsigned int serviceId, unsigned short moduleId, unsigned int msgId)
 {
+    if (msgId == 0) msgId = m_context.msgId;
     int rc = m_service->sendMsgToClient(msgData, msgLen, msgId, serviceId, moduleId, protocolId, conn);
 	if (rc != Success) ReleaseErrorLog("send client message error3, msgLen = %u, serviceId = %d, moduleId = %d, protocolId = %d, rc = %d", msgLen, serviceId, moduleId, protocolId, rc);
 	return rc;

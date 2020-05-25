@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.19
  * description : 网络消息收发处理
  */
@@ -124,13 +124,18 @@ MsgQueueList* CNetMsgHandler::getNodeMsgQueue(const unsigned int readerId)
 MsgQueueList* CNetMsgHandler::getNetHandlerMsgQueue(uuid_type& connId)
 {
 	MsgQueueList* msgQueue = NULL;
+    MsgHandlerList* msgHandler = NULL;
 	while (m_curNetQueueIdx != 0)
 	{
 		msgQueue = (MsgQueueList*)(m_shmAddr + m_curNetQueueIdx);
 		if (CMessageQueue::readyRead(m_shmAddr + msgQueue->queue, msgQueue->header) == Success)
 		{
-			connId = m_netMsgHandlers[m_curNetHandlerIdx]->connId;
-			return msgQueue;
+            msgHandler = m_netMsgHandlers[m_curNetHandlerIdx];
+            if (msgHandler != NULL)
+            {
+                connId = msgHandler->connId;
+                return msgQueue;
+            }
 		}
 		m_curNetQueueIdx = msgQueue->next;
 	}
@@ -172,6 +177,29 @@ BufferHeader* CNetMsgHandler::getBufferHeader()
 // 返回值为 (char*)-1 则表示直接丢弃该数据；返回值为非NULL则读取数据；返回值为NULL则不读取数据
 char* CNetMsgHandler::getWriteBuffer(const int len, const uuid_type connId, BufferHeader* bufferHeader, void*& cb)
 {
+    /*
+    {
+        const static char* matchIp = "1921681";
+        const char* localIp = m_cfg->IP;
+        unsigned int mIpIdx = 0;
+        unsigned int lipIdx = 0;
+        while (matchIp[mIpIdx] != '\0')
+        {
+            if (localIp[lipIdx] == '.')
+            {
+                ++lipIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] != matchIp[mIpIdx]) return NULL;
+            
+            ++mIpIdx;
+            ++lipIdx;
+        }
+    }
+    */
+ 
+    
 	MsgQueueList* readMsg = getNodeMsgQueue(ntohl(m_netMsgHeader.readerId));
 	if (readMsg == NULL)
 	{
@@ -184,7 +212,7 @@ char* CNetMsgHandler::getWriteBuffer(const int len, const uuid_type connId, Buff
 	int rc = CMessageQueue::beginWriteBuff(m_shmAddr + readMsg->queue, readMsg->header, pShmBuff, len);
     if (rc != Success)
 	{
-	    ReleaseWarnLog("begin write data to shared buff failed = %d, dicard msg len = %d, readerId = %u, writerId = %u",
+	    ReleaseErrorLog("begin write data to shared buff failed = %d, dicard msg len = %d, readerId = %u, writerId = %u",
 		rc, len, ntohl(m_netMsgHeader.readerId), ntohl(m_netMsgHeader.writerId));
 		return (char*)-1;  // 一般情况下是队列满了，失败则必须丢消息，因为消息头已经读出来了，否则会导致数据解析错乱
 	}
@@ -205,6 +233,29 @@ void CNetMsgHandler::submitWriteBuffer(char* buff, const int len, const uuid_typ
 // isNeedWriteMsgHeader 如果逻辑层调用者填值为false，则调用者必须自己写入网络消息头部数据，即返回的可读buff中已经包含了网络消息头数据
 char* CNetMsgHandler::getReadBuffer(int& len, uuid_type& connId, bool& isNeedWriteMsgHeader, void*& cb)
 {
+    /*
+    {
+        const static char* matchIp = "1921681";
+        const char* localIp = m_cfg->IP;
+        unsigned int mIpIdx = 0;
+        unsigned int lipIdx = 0;
+        while (matchIp[mIpIdx] != '\0')
+        {
+            if (localIp[lipIdx] == '.')
+            {
+                ++lipIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] != matchIp[mIpIdx]) return NULL;
+            
+            ++mIpIdx;
+            ++lipIdx;
+        }
+    }
+    */
+    
+    
 	MsgQueueList* netMsgQueue = getNetMsgQueue(connId);
 	if (netMsgQueue == NULL) return NULL;
 

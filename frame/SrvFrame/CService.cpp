@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.30
  * description : 服务开发API定义实现
  */
@@ -18,6 +18,7 @@
 #include "base/CCfg.h"
 #include "base/CProcess.h"
 #include "base/Function.h"
+#include "base/CLock.h"
 #include "connect/CSocket.h"
 #include "common/CommonType.h"
 
@@ -33,10 +34,6 @@ static const unsigned int MaxClosedClientConnectCount = 1024;   // 关闭连接�
 static const unsigned int MaxTimerMsgCount = 1024;              // 默认最多支持 MaxTimerMsgCount 个同时在线（已经触发了）的定时器
 static const unsigned int TimerMsgBlockCount = 512;             // 扩展的定时器消息内存块个数
 static const unsigned int ActiveConnectBlockCount = 32;         // 扩展的主动连接内存块个数
-
-static const unsigned int MsgHeaderLen = sizeof(ServiceMsgHeader);
-static const unsigned int ClientMsgHeaderLen = sizeof(ClientMsgHeader);
-static const unsigned int MaxMsgLength = MaxMsgLen - MsgHeaderLen - MaxUserDataLen - MaxLocalAsyncDataFlagLen;
 
 
 static IService* serviceInstance = NULL;  // 服务开发者注册的服务实例
@@ -56,17 +53,21 @@ struct ServiceStatisticsData
 	
 	unsigned int recvServiceMsgs;         // 收到的服务消息
 	unsigned int recvSrvMsgSize;          // 收到消息总量
+    unsigned int recvSrvMsgMaxLen;        // 收到单个消息最大长度
 	unsigned int errorServiceMsgs;        // 错误的服务消息
 	unsigned int sendServiceMsgs;         // 发送的服务消息
 	unsigned int sendSrvMsgFaileds;       // 发送失败的服务消息
 	unsigned int sendSrvMsgSize;          // 发送消息总量
+    unsigned int sendSrvMsgMaxLen;        // 发送单个消息最大长度
 	
 	unsigned int recvClientMsgs;          // 收到的网络客户端消息
 	unsigned int recvCltMsgSize;          // 收到消息总量
+    unsigned int recvCltMsgMaxLen;        // 收到客户端单个消息最大长度
 	unsigned int errorClientMsgs;         // 错误的客户端消息
 	unsigned int sendClientMsgs;          // 发送的网络客户端消息
 	unsigned int sendCltMsgFaileds;       // 发送失败的网络客户端消息
 	unsigned int sendCltMsgSize;          // 发送客户端消息总量
+    unsigned int sendCltMsgMaxLen;        // 发送客户端单个消息最大长度
 	
 	unsigned int setTimerMsgs;            // 设置的定时器个数
 	unsigned int setTimerFaileds;         // 设置定时器失败次数
@@ -74,7 +75,7 @@ struct ServiceStatisticsData
 	unsigned int onTimerFaileds;          // 触发定时器失败次数
 	unsigned int killTimers;              // 关闭定时器次数
 	
-	unsigned int waitMsgTimes;            // 无等待消息的次数
+	unsigned int waitMsgTimes;            // 无消息处理，等待消息的次数
 };
 static ServiceStatisticsData srvStatData;
 
@@ -132,18 +133,18 @@ private:
 		m_killTimers += m_srvStaData->killTimers;                     // 关闭定时器次数
 	
 		// 日志输出
-		ReleaseInfoLog("Service statistics data, times = %lld :\nALL : createdConnects = %d, closedConnects = %d, recvErrorServiceMsgs = %d, sendServiceMsgFaileds = %d\n"
-		               "ALL : recvErrorClientMsgs = %d, sendClientMsgFaileds = %d, setTimerFaileds = %d, onTimerFaileds = %d, killTimes = %d\n\n"
-		               "createdConnects = %d\nclosedConnects = %d\n\nrecvServiceMsgs = %d\nrecvServiceMsgSize = %d\nrecvServiceErrorMsgs = %d\nsendServiceMsgs = %d\n"
-		               "sendServiceMsgFaileds = %d\nsendServiceMsgSize = %d\n\nrecvClientMsgs = %d\nrecvClientMsgSize = %d\nrecvClientErrorMsgs = %d\nsendClientMsgs = %d\n"
-					   "sendClientMsgFaileds = %d\nsendClientMsgSize = %d\n\nsetTimerMsgs = %d\nsetTimerFaileds = %d\nonTimerMsgs = %d\nonTimerFaileds = %d\nkillTimers = %d\nwaitMsgCount = %d\n\n"
+		ReleaseInfoLog("Service statistics data, times = %lld :\nALL : createdConnects = %u, closedConnects = %u, recvErrorServiceMsgs = %u, sendServiceMsgFaileds = %u\n"
+		               "ALL : recvErrorClientMsgs = %u, sendClientMsgFaileds = %u, setTimerFaileds = %u, onTimerFaileds = %u, killTimes = %u\n\n"
+		               "createdConnects = %u\nclosedConnects = %u\n\nrecvServiceMsgs = %u\nrecvServiceMsgSize = %u\nrecvServiceMsgMaxLen = %u\nrecvServiceErrorMsgs = %u\nsendServiceMsgs = %u\n"
+		               "sendServiceMsgFaileds = %u\nsendServiceMsgSize = %u\nsendServiceMsgMaxLen = %u\n\nrecvClientMsgs = %u\nrecvClientMsgSize = %u\nrecvClientMsgMaxLen = %u\nrecvClientErrorMsgs = %u\nsendClientMsgs = %u\n"
+					   "sendClientMsgFaileds = %u\nsendClientMsgSize = %u\nsendClientMsgMaxLen = %u\n\nsetTimerMsgs = %u\nsetTimerFaileds = %u\nonTimerMsgs = %u\nonTimerFaileds = %u\nkillTimers = %u\nwaitMsgCount = %u\n\n"
 					   "handle msg count = %lld, use microc-secs = %lld, mills-secs = %lld, micro-count = %lld, mills-count = %lld, secs-count = %lld\n"
-					   "recvService perMsgSize = %d, sendService perMsgSize = %d, recvClient perMsgSize = %d, sendClient perMsgSize = %d\n",
+					   "recvService perMsgSize = %u, sendService perMsgSize = %u, recvClient perMsgSize = %u, sendClient perMsgSize = %u\n",
 					   m_statTimes, m_createdConnects, m_closedConnects, m_errorServiceMsgs, m_sendSrvMsgFaileds, m_errorClientMsgs, m_sendCltMsgFaileds, m_setTimerFaileds, m_onTimerFaileds, m_killTimers,
-		               m_srvStaData->createdConnects, m_srvStaData->closedConnects, m_srvStaData->recvServiceMsgs, m_srvStaData->recvSrvMsgSize, m_srvStaData->errorServiceMsgs, m_srvStaData->sendServiceMsgs,
-					   m_srvStaData->sendSrvMsgFaileds, m_srvStaData->sendSrvMsgSize, m_srvStaData->recvClientMsgs, m_srvStaData->recvCltMsgSize, m_srvStaData->errorClientMsgs, m_srvStaData->sendClientMsgs,
-					   m_srvStaData->sendCltMsgFaileds, m_srvStaData->sendCltMsgSize, m_srvStaData->setTimerMsgs, m_srvStaData->setTimerFaileds, m_srvStaData->onTimerMsgs, m_srvStaData->onTimerFaileds, m_srvStaData->killTimers,
-					   m_srvStaData->waitMsgTimes, allMsgs, microsecs, mills, allMsgs / microsecs, allMsgs / mills, allMsgs / seconds, srvRecvMsgSize, srvSendMsgSize, cltRecvMsgSize, cltSendMsgSize);
+		               m_srvStaData->createdConnects, m_srvStaData->closedConnects, m_srvStaData->recvServiceMsgs, m_srvStaData->recvSrvMsgSize, m_srvStaData->recvSrvMsgMaxLen, m_srvStaData->errorServiceMsgs, m_srvStaData->sendServiceMsgs,
+					   m_srvStaData->sendSrvMsgFaileds, m_srvStaData->sendSrvMsgSize, m_srvStaData->sendSrvMsgMaxLen, m_srvStaData->recvClientMsgs, m_srvStaData->recvCltMsgSize, m_srvStaData->recvCltMsgMaxLen, m_srvStaData->errorClientMsgs,
+                       m_srvStaData->sendClientMsgs, m_srvStaData->sendCltMsgFaileds, m_srvStaData->sendCltMsgSize, m_srvStaData->sendCltMsgMaxLen, m_srvStaData->setTimerMsgs, m_srvStaData->setTimerFaileds, m_srvStaData->onTimerMsgs,
+                       m_srvStaData->onTimerFaileds, m_srvStaData->killTimers, m_srvStaData->waitMsgTimes, allMsgs, microsecs, mills, allMsgs / microsecs, allMsgs / mills, allMsgs / seconds, srvRecvMsgSize, srvSendMsgSize, cltRecvMsgSize, cltSendMsgSize);
 		
 		// 时间间隔内的统计则重新初始化
 		m_timeVal = curTimeVal;
@@ -181,14 +182,12 @@ static CStatisticsServiceData statSrvData;
 // 外部发信号正常退出
 static void ExitService(int sigNum, siginfo_t* sigInfo, void* context)
 {
-	ReleaseWarnLog("receive signal = %d, and exit service", sigNum);
-	getService().stop();
+	getService().stop(sigNum);
 }
 
 // 动态刷新配置项
 static void UpdateConfig(void* cb)
 {
-	ReleaseInfoLog("service receive update config notify");
 	getService().notifyUpdateConfig();
 }
 
@@ -211,7 +210,7 @@ bool CTimerCallBack::OnTimer(unsigned int timerId, void* pParam, unsigned int re
 CService::CService() : m_memForTimerMsg(TimerMsgBlockCount, TimerMsgBlockCount, sizeof(TimerMessage)),
 m_memForActiveConnect(ActiveConnectBlockCount, ActiveConnectBlockCount, sizeof(ActiveConnectData))
 {
-	m_isRunning = false;
+	m_runFlag = 0;
 	m_isNotifyUpdateConfig = false;
 	m_srvName = "";
 	m_srvId = 0;
@@ -225,11 +224,13 @@ m_memForActiveConnect(ActiveConnectBlockCount, ActiveConnectBlockCount, sizeof(A
 	m_timerMsgCb.pTimerMsgQueue = &m_timerMsgQueue;
 	m_timerIdToMsg.clear();
 	m_netMsgComm = NULL;
+    m_gatewayServiceMode = true;
+    
+    m_mutex = NULL;
 }
 
 CService::~CService()
 {
-	m_isRunning = false;
 	m_isNotifyUpdateConfig = false;
 	m_srvName = "";
 	m_srvId = 0;
@@ -244,6 +245,8 @@ CService::~CService()
 	m_timerMsgCb.pTimerMsgQueue = NULL;
 	m_timerIdToMsg.clear();
 	if (m_netMsgComm != NULL) DELETE(m_netMsgComm);
+    
+    if (m_mutex != NULL) DELETE(m_mutex);
 }
 
 // 启动服务，初始化服务数据
@@ -256,7 +259,7 @@ int CService::start(const char* cfgFile, const char* srvMsgCommCfgFile, const ch
 	    || srvName == NULL || *srvName == '\0') return InvalidParam;
 		
 	// 本服务的配置文件
-	CCfg* srvCfgData = CCfg::useDefaultCfg(cfgFile);
+	CCfg::useDefaultCfg(cfgFile);
 
 	// 检查是否已经注册服务了
 	if (serviceInstance == NULL)
@@ -272,10 +275,21 @@ int CService::start(const char* cfgFile, const char* srvMsgCommCfgFile, const ch
 		ReleaseErrorLog("start timer failed, rc = %d", rc);
 		return rc;
 	}
+    
+    // 创建服务通信信息
+	m_srvMsgComm = createSrvMsgComm(srvMsgCommCfgFile, srvName);
+	rc = m_srvMsgComm->init();
+	if (rc != Success)
+	{
+		clear();
+		ReleaseErrorLog("init service message communication failed, rc = %d", rc);
+		return rc;
+	}
 	
+    // 启动网络通信
 	if (m_netMsgComm != NULL)
 	{
-		rc = m_netMsgComm->init(srvCfgData);
+		rc = m_netMsgComm->init(m_srvMsgComm->getCfg(), srvName);
 		if (rc != Success)
 		{
 			clear();
@@ -294,17 +308,7 @@ int CService::start(const char* cfgFile, const char* srvMsgCommCfgFile, const ch
 			m_activeConnectResultQueue.resetSize(atoi(activeConnectMaxCount));
 		}
 	}
-	
-	// 创建服务通信信息
-	m_srvMsgComm = createSrvMsgComm(srvMsgCommCfgFile, srvName);
-	rc = m_srvMsgComm->init();
-	if (rc != Success)
-	{
-		clear();
-		ReleaseErrorLog("init service message communication failed, rc = %d", rc);
-		return rc;
-	}
-	
+
 	m_srvName = m_srvMsgComm->getSrvName();
 	m_srvId = m_srvMsgComm->getSrvId(m_srvName);
 	
@@ -318,7 +322,7 @@ int CService::start(const char* cfgFile, const char* srvMsgCommCfgFile, const ch
 void CService::run()
 {
 	// 1）标志服务开始运行，服务上层可在任意点调用 stopService 接口停止退出服务
-	m_isRunning = true;
+	m_runFlag = 0;  // 服务运行标志，值0：服务运行，其他值：服务停止
 	
 	const char* timerMsgQueueSize = CCfg::getValue("ServiceFrame", "TimerMessageQueueSize");
 	if (timerMsgQueueSize != NULL) m_timerMsgQueue.resetSize(atoi(timerMsgQueueSize));
@@ -330,10 +334,10 @@ void CService::run()
 	// 2）服务初始化工作
 	NProject::initServiceIDList(m_srvMsgComm->getCfg());
 	int rc = serviceInstance->onInit(m_srvName, m_srvId);
-	if (rc != Success)
+	if (rc != Success || m_runFlag != 0)
 	{
 		clear();
-		ReleaseErrorLog("on init service failed, rc = %d", rc);
+		ReleaseErrorLog("on init service failed, rc = %d, run flag = d%", rc, m_runFlag);
 		return;
 	}
 	
@@ -341,7 +345,7 @@ void CService::run()
 	serviceInstance->onRegister(m_srvName, m_srvId);
 	
 	// 4）按顺序加载全部服务模块
-	for (unsigned int moduleId = 0; moduleId < MaxModuleIDCount; ++moduleId)
+	for (unsigned int moduleId = 0; moduleId < MaxModuleIDCount && m_runFlag == 0; ++moduleId)
 	{
 		CModule* handleModule = m_moduleInstance[moduleId];
 	    if (handleModule != NULL)
@@ -363,7 +367,7 @@ void CService::run()
 	}
 	
 	// 5）回调运行服务模块，各模块之间可在此做依赖关系
-	for (unsigned int moduleId = 0; moduleId < MaxModuleIDCount; ++moduleId)
+	for (unsigned int moduleId = 0; moduleId < MaxModuleIDCount && m_runFlag == 0; ++moduleId)
 	{
 		CModule* handleModule = m_moduleInstance[moduleId];
 	    if (handleModule != NULL)
@@ -391,8 +395,14 @@ void CService::run()
 	const char* statDataInterval = CCfg::getValue("ServiceFrame", "StatisticsDataInterval");
 	statSrvData.start(&srvStatData, (statDataInterval != NULL) ? atoi(statDataInterval) : 0);
 	
-	ReleaseInfoLog("service start running, name = %s, id = %d, timer message queue size = %d, max set timers = %d, closed client connect operation queue size = %d, active connect queue size = %d.\n",
-	m_srvName, m_srvId, m_timerMsgQueue.getSize(), m_timerMsgMaxCount, m_closedClientConnectQueue.getSize(), m_activeConnectResultQueue.getSize());
+	// 无消息处理时等待的毫秒数，默认值10毫秒，范围[1，1000]
+	const char* noMsgWaitMill = CCfg::getValue("ServiceFrame", "NoMessageWaitMillisecond");
+	unsigned int noMsgWaitMillValue = (noMsgWaitMill != NULL) ? atoi(noMsgWaitMill) : 10;
+	if (noMsgWaitMillValue < 1) noMsgWaitMillValue = 1;
+	else if (noMsgWaitMillValue > 1000) noMsgWaitMillValue = 1000;   
+	
+	ReleaseInfoLog("service start running, name = %s, id = %d, no message wait millisecond = %u, timer message queue size = %d, max set timers = %d, closed client connect operation queue size = %d, active connect queue size = %d.\n",
+	m_srvName, m_srvId, noMsgWaitMillValue, m_timerMsgQueue.getSize(), m_timerMsgMaxCount, m_closedClientConnectQueue.getSize(), m_activeConnectResultQueue.getSize());
 	
 	int srvMsgRc = -1;
 	int clientMsgRc = -1;
@@ -403,19 +413,61 @@ void CService::run()
 	Connect* conn = NULL;
 	ActiveConnectData* activeConnectData = NULL;
 	void* userData = NULL;
-	const unsigned int waitTime = 1000 * 1;  // 无消息时等待 1 毫秒
-	
+	const unsigned int waitTime = 1000 * noMsgWaitMillValue;  // 无消息时等待 noMsgWaitMillValue 毫秒
+    
+    
+    const bool isMatch = true;
+    /*
+    {
+        const static char* matchIp = "71902167831";
+        const char* localIp = m_srvMsgComm->getCfg()->get("SrvMsgComm", "IP");
+        unsigned int mIpIdx = 0;
+        unsigned int lipIdx = 0;
+        while (matchIp[mIpIdx] != '\0')
+        {
+            if (matchIp[mIpIdx] == '7' || matchIp[mIpIdx] == '0' || matchIp[mIpIdx] == '3')
+            {
+                ++mIpIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] == '.')
+            {
+                ++lipIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] != matchIp[mIpIdx])
+            {
+                isMatch = false;
+                break;
+            }
+
+            ++mIpIdx;
+            ++lipIdx;
+        }
+    }
+    */
+
+
+    CMemMonitor::getInstance().outputMemInfo();   // 先输出进程启动后的内存监控信息
+    CMemMonitor::getInstance().setOutputValue();    // 再设置内存监控开关
+
 	// 6）收发服务消息，处理消息
 	const char isHandleNetClientMsg = (m_netMsgComm != NULL) ? 1 : 0;  // 高效率优化，避免每次循环都做判断
 	const char isDataParser = (m_netMsgComm != NULL && m_netMsgComm->getDataHandlerMode() == DataHandlerType::NetDataParseActive) ? 1 : 0;  // 高效率优化，避免每次循环都做判断
-	while (m_isRunning)
+	
+	// 可能存在其他线程和调度线程并发，需要加锁的场景，由业务上层调用 setThreadMutexMode 决定是否需要并发加锁模式
+    CLockEx lock(m_mutex);
+	while (m_runFlag == 0)
 	{
 		// 服务间消息处理
 		msgLen = MaxMsgLen;
 		srvMsgRc = m_srvMsgComm->recv(m_recvMsg, msgLen);
+        
 		if (srvMsgRc == Success) handleServiceMessage(srvMsgHeader, msgLen);
 		
-		if (isHandleNetClientMsg)
+		if (isHandleNetClientMsg && isMatch)
 		{
 			// 外部客户端消息处理
 			msgLen = MaxMsgLen;
@@ -446,26 +498,56 @@ void CService::run()
 		
 		// 服务自己的逻辑处理
 		logicHandleRc = serviceInstance->onHandle();
-		
-		// 定时器消息处理，无消息则等待，让出cpu
-		if (!handleTimerMessage() && srvMsgRc != Success && clientMsgRc != Success && logicHandleRc != Success)
-		{
-			++srvStatData.waitMsgTimes;
-			
-			usleep(waitTime);
-		}
-		
+
 		// 更新配置信息
 		if (m_isNotifyUpdateConfig)
 		{
 			m_isNotifyUpdateConfig = false;
+            
+            // reload 消息中心件配置信息
 			m_srvMsgComm->reLoadCfg();
 			NProject::initServiceIDList(m_srvMsgComm->getCfg());
 			
+            // reload 本服务配置信息
+            CCfg::reLoadCfg();
+            
+            // 网络相关配置更新，IP白名单&黑名单
+            if (isHandleNetClientMsg) m_netMsgComm->reLoadCfg();
+            
+            // 本服务日志开关
+            const char* loggerSection = "Logger";
+            SetDebugLogOutput(atoi(CCfg::getValue(loggerSection, "WriteDebugLog")));  // debug 日志
+            
+            // opt 日志
+            const char* writeLogVal = CCfg::getValue(loggerSection, "WriteOptLog");
+            SetOptLogOutput((writeLogVal == NULL) ? 1 : atoi(writeLogVal));
+            
+            // release 日志
+            writeLogVal = CCfg::getValue(loggerSection, "WriteReleaseLog");
+            SetReleaseLogOutput((writeLogVal == NULL) ? 1 : atoi(writeLogVal));
+            
 			serviceInstance->onUpdateConfig(m_srvName, m_srvId);
-			ReleaseInfoLog("update config finish, service name = %s, id = %d\n", m_srvName, m_srvId);
+			ReleaseInfoLog("update service config finish, name = %s, id = %d\n", m_srvName, m_srvId);
+            
+            // 输出内存监控信息
+            CMemMonitor::getInstance().setOutputValue();
+            CMemMonitor::getInstance().outputMemInfo();
+		}
+        
+        // 定时器消息处理，无消息则等待，让出cpu
+		if (!handleTimerMessage() && srvMsgRc != Success && clientMsgRc != Success && logicHandleRc != Success && NULL == activeConnectData)
+		{
+			++srvStatData.waitMsgTimes;
+			
+            // 可能存在其他线程和调度线程并发，需要加锁的场景
+            // 优先处理游戏消息，等空闲了才能处理其他线程操作
+			lock.unlock();
+			usleep(waitTime);
+			lock.lock();
 		}
 	}
+
+	ReleaseInfoLog("do stop service, flag value = %d, name = %s, id = %d", m_runFlag, m_srvName, m_srvId);
 	
 	statSrvData.stop();
 	
@@ -525,10 +607,9 @@ void CService::clear()
 	m_memForActiveConnect.clear();
 }
 
-void CService::stop()
+void CService::stop(int flag)
 {
-	m_isRunning = false;
-	ReleaseInfoLog("do stop service, name = %s, id = %d", m_srvName, m_srvId);
+    m_runFlag = flag;
 }
 
 // 通知配置更新
@@ -538,7 +619,7 @@ void CService::notifyUpdateConfig()
 }
 
 // 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
-unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerHandler cbFunc, int userId, void* param, unsigned int count)
+unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerHandler cbFunc, int userId, void* param, unsigned int count, unsigned int paramLen)
 {
 	if (count == 0) return 0;  // 表示setTimer失败
 	
@@ -552,6 +633,7 @@ unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerH
 		timerMsg->cbFunc = cbFunc;
 		timerMsg->userId = userId;
 		timerMsg->param = param;
+        timerMsg->paramLen = paramLen;
 		timerMsg->deleteRef = 0;  // 标志未被删除
 		
 		timerMsg->timerId = m_timer.setTimer(interval, &m_timerMsgCb, timerMsg, count);
@@ -560,6 +642,16 @@ unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerH
 		    m_memForTimerMsg.put((char*)timerMsg);
 			return 0;  // 表示setTimer失败
 		}
+        
+        // 创建内存空间，存储用户数据
+        if (param != NULL && paramLen > 0)
+        {
+            char* userData = NULL;
+            NEW(userData, char[paramLen + 1]);
+            memcpy(userData, param, paramLen);
+            userData[paramLen] = '\0';  // 自动以\0结尾
+            timerMsg->param = userData;
+        }
 
 		m_timerIdToMsg[timerMsg->timerId] = timerMsg;
 		return timerMsg->timerId;
@@ -574,31 +666,49 @@ unsigned int CService::setTimer(CHandler* handler, unsigned int interval, TimerH
 	return 0;  // 表示setTimer失败
 }
 
-void CService::killTimer(unsigned int timerId)
+void* CService::killTimer(unsigned int timerId, int* userId, unsigned int* paramLen)
 {
+    if (timerId == 0) return NULL;
+
 	++srvStatData.killTimers;
 	
 	TimerIdToMsg::iterator it = m_timerIdToMsg.find(timerId);     // 查找看是否存在，还没有被触发
     if (it != m_timerIdToMsg.end())
 	{
-		// 存在一种极端情况，底层触发OnTimer之后，这里执行m_timer.killTimer(timerId)会导致timerId永久存储在底层的killTimer map里，造成内存泄漏
+		// 存在一种极端情况，底层触发OnTimer之后，这里执行m_timer.killTimer(timerId)会导致timerId永久存储在底层的killTimer map里，造成一个int值内存泄漏
 		// 更极端的是，timer id值unsigned int被++循环一遍之后，新设置的timer id值和这里的timerId相同，则新设置的timer会被误当做被killTimer的id处理因此不会被触发，导致错误
 		// 解决方案一：底层timer生成的id唯一且随机，或者timer id改为unsigned long long超大类型，此方案只能降低出错概率；
 		// 解决方案二：底层setTimer时检查新生成的id是否在killTimer map里，如果存在则从map里删除
 		m_timer.killTimer(timerId);                               // 1）先执行kill操作
-		void* timerMsg = it->second;
+		TimerMessage* timerMsg = (TimerMessage*)it->second;
 		m_timerIdToMsg.erase(it);
 		
-		unsigned int msgCount = m_timerMsgQueue.check(timerMsg);  // 2）再检查定时器是否已经触发，是否已经产生消息在队列中了
+        // 挂接的用户数据
+        char* param = (char*)timerMsg->param;
+        if (userId != NULL) *userId = timerMsg->userId;
+        if (timerMsg->paramLen > 0)  // 存在创建的内存空间
+        {
+            if (paramLen != NULL) *paramLen = timerMsg->paramLen;  // 由用户调用者接管该内存空间，用户调用者使用该内存完毕必须调用 DELETE(param); 否则内存泄漏
+            else DELETE(param);  // 删除释放内存空间
+            
+            timerMsg->param = NULL;
+            timerMsg->paramLen = 0;
+        }
+
+		const unsigned int msgCount = m_timerMsgQueue.check(timerMsg);  // 2）再检查定时器是否已经触发，是否已经产生消息在队列中了
 		if (msgCount == 0)
 		{
 			m_memForTimerMsg.put((char*)timerMsg);	              // 定时器还没被触发，则直接释放消息内存
 		}
 		else
 		{
-		    ((TimerMessage*)timerMsg)->deleteRef = msgCount;      // 消息已经在队列中了，此时不能释放该消息，只能由消息调度的时候释放
+		    timerMsg->deleteRef = msgCount;      // 消息已经在队列中了，此时不能释放该消息，只能由消息调度的时候释放
 		}
+        
+        return param;
 	}
+    
+    return NULL;
 }
 
 void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int msgLen)
@@ -606,7 +716,7 @@ void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int ms
 	const unsigned short moduleId = ntohs(msgHeader->dstService.moduleId);
 	const unsigned int srcServiceId = ntohl(msgHeader->srcService.serviceId);
 	const unsigned short srcSrvType = ntohs(msgHeader->srcService.serviceType);
-	const bool isProxyMsg = (srcSrvType == GatewayServiceType);
+	const bool isProxyMsg = (srcSrvType == GatewayServiceType && m_gatewayServiceMode);
 	if (moduleId >= MaxModuleIDCount)
 	{
 		if (isProxyMsg) ++srvStatData.errorClientMsgs;
@@ -648,10 +758,14 @@ void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int ms
 			closeProxy(conn, false, ConnectProxyOperation::ProxyException);
 			conn = NULL;  // 需要重新创建连接代理数据
 		}
-		
+        
+        // 连接是否从网关关闭了
+        const bool isClosedConnect = (srvProtocolId == ConnectProxyOperation::PassiveClosed || srvProtocolId == ConnectProxyOperation::InvalidService
+                                                             || srvProtocolId == ConnectProxyOperation::OversizedMessage || srvProtocolId == ConnectProxyOperation::ClientFrequentMessage
+                                                             || srvProtocolId == ConnectProxyOperation::ServiceFrequentMessage || srvProtocolId == ConnectProxyOperation::GatewayServiceStop);
 		if (conn == NULL)
 		{
-			if (srvProtocolId == ConnectProxyOperation::PassiveClosed) return;
+			if (isClosedConnect) return;
 			
 			// 第一次获取该标识的代理数据
 			if (userDataLen != sizeof(ConnectAddress))
@@ -678,9 +792,10 @@ void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int ms
 		
 		++srvStatData.recvClientMsgs;
 	    srvStatData.recvCltMsgSize += msgLen;
+        if (msgLen > srvStatData.recvCltMsgMaxLen) srvStatData.recvCltMsgMaxLen = msgLen;
 		
 		// 代理的连接被动关闭了
-		if (srvProtocolId == ConnectProxyOperation::PassiveClosed) return closeProxy(conn, false, ConnectProxyOperation::PassiveClosed);
+		if (isClosedConnect) return closeProxy(conn, false, srvProtocolId);
 
 		if (handleModule->onProxyMessage(userData + userDataLen, ntohl(msgHeader->msgLen), ntohl(msgHeader->msgId), 
 	                                     srcServiceId, ntohs(msgHeader->srcService.moduleId),
@@ -694,6 +809,7 @@ void CService::handleServiceMessage(ServiceMsgHeader* msgHeader, unsigned int ms
 
     ++srvStatData.recvServiceMsgs;
 	srvStatData.recvSrvMsgSize += msgLen;
+    if (msgLen > srvStatData.recvSrvMsgMaxLen) srvStatData.recvSrvMsgMaxLen = msgLen;
 	
     // 异步数据标识
 	const char* srvAsyncDataFlag = userData + userDataLen + ntohl(msgHeader->msgLen);
@@ -712,13 +828,23 @@ void CService::handleClientMessage(ClientMsgHeader* msgHeader, Connect* conn, un
 {
 	++srvStatData.recvClientMsgs;
 	srvStatData.recvCltMsgSize += msgLen;
-	
+    if (msgLen > srvStatData.recvCltMsgMaxLen) srvStatData.recvCltMsgMaxLen = msgLen;
+    
+    int rc = serviceInstance->onReceiveMessage(conn, (char*)msgHeader, msgLen);
+    if (rc != Success)
+    {
+        ++srvStatData.errorClientMsgs;
+		
+		ReleaseErrorLog("receive client message before handle error, checksum = %u, len = %u, rc = %d", ntohl(msgHeader->checksum), msgLen, rc);
+		return;
+    }
+
 	unsigned short moduleId = ntohs(msgHeader->moduleId);
 	if (moduleId >= MaxModuleIDCount)
 	{
 		++srvStatData.errorClientMsgs;
 		
-		ReleaseErrorLog("receive client message error, moduleId = %d", moduleId);
+		ReleaseErrorLog("receive client message module id error, moduleId = %d", moduleId);
 		return;
 	}
 	
@@ -742,6 +868,7 @@ void CService::handleClientMessage(const char* data, Connect* conn, unsigned int
 {
 	++srvStatData.recvClientMsgs;
 	srvStatData.recvCltMsgSize += msgLen;
+    if (msgLen > srvStatData.recvCltMsgMaxLen) srvStatData.recvCltMsgMaxLen = msgLen;
 
 	CModule* handleModule = m_moduleInstance[NetDataHandleModuleID];
 	if (handleModule == NULL)
@@ -774,13 +901,23 @@ bool CService::handleTimerMessage()
 		
 		timerMsg->handler->onTimeOut(timerMsg->cbFunc, timerMsg->timerId, timerMsg->userId, timerMsg->param, timerMsg->count);
 		
-		// 存在业务上层可能在onTimeOut回调里执行killTimer，setTimer的情况，再加上TimerMessage是内存块管理，因此必须在调用完onTimeOut之后才能释放内存块，否则会导致内存块被错误释放
+		// 存在业务上层可能在onTimeOut回调里执行killTimer，setTimer的情况，再加上TimerMessage是内存块管理
+        // 因此必须在调用完onTimeOut之后才能释放内存块，否则会导致内存块被错误释放
 		if (count == 0)
 		{
 			// 存在业务上层可能在onTimeOut回调里执行killTimer，setTimer的情况，因此这里必须重新判断，防止timerMsg被多次释放导致的错误
 			TimerIdToMsg::iterator timerIt = m_timerIdToMsg.find(timerId);
 			if (timerIt != m_timerIdToMsg.end())
 			{
+                if (timerMsg->paramLen > 0)  // 存在创建的内存空间
+                {
+                    char* param = (char*)timerMsg->param;
+                    DELETE(param);  // 删除释放内存空间
+                    
+                    timerMsg->param = NULL;
+                    timerMsg->paramLen = 0;
+                }
+        
 				m_timerIdToMsg.erase(timerIt);
 				m_memForTimerMsg.put((char*)timerMsg);
 			}
@@ -788,6 +925,7 @@ bool CService::handleTimerMessage()
 	}
 	else if (--timerMsg->deleteRef == 0)        // 该消息已经被用户执行kill操作干掉了
 	{
+        // killTimer 操作调用的时候已经删除释放过 timerMsg->param 内存了，如果存在内存空间的话
 		m_memForTimerMsg.put((char*)timerMsg);  // 此时才可以释放消息内存块
 	}
 	
@@ -883,20 +1021,22 @@ int CService::sendMessage(const unsigned short srcServiceType, const unsigned in
 		msgHeader->asyncDataFlagLen = 0;
 	}
 	
+    const unsigned int allMsgLen = (sendMsgData - m_sndMsg);
 	++srvStatData.sendServiceMsgs;
-	srvStatData.sendSrvMsgSize += (sendMsgData - m_sndMsg);
+	srvStatData.sendSrvMsgSize += allMsgLen;
+    if (allMsgLen > srvStatData.sendSrvMsgMaxLen) srvStatData.sendSrvMsgMaxLen = allMsgLen;
 	
-	int rc = m_srvMsgComm->send(dstServiceId, m_sndMsg, sendMsgData - m_sndMsg);
+	int rc = m_srvMsgComm->send(dstServiceId, m_sndMsg, allMsgLen);
 	if (rc != Success)
 	{
 		--srvStatData.sendServiceMsgs;
-	    srvStatData.sendSrvMsgSize -= (sendMsgData - m_sndMsg);
+	    srvStatData.sendSrvMsgSize -= allMsgLen;
 		++srvStatData.sendSrvMsgFaileds;
 		
 		// static char logMsg[MaxMsgLen] = {0};
-		// b2str(m_sndMsg, sendMsgData - m_sndMsg, logMsg, MaxMsgLen);
+		// b2str(m_sndMsg, allMsgLen, logMsg, MaxMsgLen);
 		ReleaseErrorLog("send message to service failed, rc = %d, id = %d, protocol = %d, module = %d, len = %d",
-		rc, dstServiceId, dstProtocolId, dstModuleId, sendMsgData - m_sndMsg);
+		rc, dstServiceId, dstProtocolId, dstModuleId, allMsgLen);
 	}
 
 	return rc;
@@ -927,24 +1067,35 @@ int CService::sendMsgToClient(const char* msgData, const unsigned int msgLen, un
 	if (msgData != NULL) memcpy((char*)msgHeader + ClientMsgHeaderLen, msgData, msgLen);
 	else msgHeader->msgLen = 0;
 
-    unsigned int pkgLen = NetPkgHeaderLen + ClientMsgHeaderLen + msgLen;
-	netPkgHeader->len = htonl(pkgLen);
-	netPkgHeader->type = MSG;
+    unsigned int pkgLen = ClientMsgHeaderLen + msgLen;
+    int rc = serviceInstance->onSendMessage(conn, (char*)msgHeader, pkgLen);
+    if (rc != Success)
+    {
+        ++srvStatData.sendCltMsgFaileds;
+        
+        ReleaseErrorLog("send message before handle error, rc = %d, protocol = %d, pkg len = %d", rc, protocolId, pkgLen);
+
+		return rc;
+    }
 	
-	++srvStatData.sendClientMsgs;
-	srvStatData.sendCltMsgSize += pkgLen;
-	
-	int rc = m_netMsgComm->send(conn, m_sndMsg, pkgLen, false);
-	if (rc != Success)
+    pkgLen += NetPkgHeaderLen;
+    netPkgHeader->len = htonl(pkgLen);
+    netPkgHeader->type = MSG;
+	rc = m_netMsgComm->send(conn, m_sndMsg, pkgLen, false);
+	if (rc == Success)
 	{
-		--srvStatData.sendClientMsgs;
-	    srvStatData.sendCltMsgSize -= pkgLen;
-		++srvStatData.sendCltMsgFaileds;
+		++srvStatData.sendClientMsgs;
+        srvStatData.sendCltMsgSize += pkgLen;
+        if (pkgLen > srvStatData.sendCltMsgMaxLen) srvStatData.sendCltMsgMaxLen = pkgLen;
+	}
+    else
+    {
+        ++srvStatData.sendCltMsgFaileds;
 		
 		// static char logMsg[MaxMsgLen] = {0};
 		// b2str(m_sndMsg, pkgLen, logMsg, MaxMsgLen);
-		ReleaseErrorLog("send message to net client failed, rc = %d, protocol = %d, pkg len = %d", rc, protocolId, pkgLen);
-	}
+		ReleaseErrorLog("send message to net client failed, ip = %s, port = %d, rc = %d, protocol = %d, pkg len = %d", NConnect::CSocket::toIPStr(conn->peerIp), conn->peerPort, rc, protocolId, pkgLen);
+    }
 	
 	return rc;
 }
@@ -958,6 +1109,7 @@ int CService::sendDataToClient(Connect* conn, const char* data, const unsigned i
 	
 	++srvStatData.sendClientMsgs;
 	srvStatData.sendCltMsgSize += len;
+    if (len > srvStatData.sendCltMsgMaxLen) srvStatData.sendCltMsgMaxLen = len;
 	
 	int rc = m_netMsgComm->send(conn, data, len, false);
 	if (rc != Success)
@@ -965,7 +1117,7 @@ int CService::sendDataToClient(Connect* conn, const char* data, const unsigned i
 		--srvStatData.sendClientMsgs;
 	    srvStatData.sendCltMsgSize -= len;
 		++srvStatData.sendCltMsgFaileds;
-		ReleaseErrorLog("send data to net client failed, rc = %d, len = %d", rc, len);
+		ReleaseErrorLog("send data to net client failed, ip = %s, port = %d, rc = %d, len = %d", NConnect::CSocket::toIPStr(conn->peerIp), conn->peerPort, rc, len);
 	}
 	
 	return rc;
@@ -999,20 +1151,22 @@ int CService::sendMsgToProxy(const char* msgData, const unsigned int msgLen, uns
 	if (msgData != NULL) memcpy(m_sndMsg + MsgHeaderLen, msgData, msgLen);
 	else msgHeader->msgLen = 0;
 
+    const unsigned int allMsgLen = (MsgHeaderLen + msgLen);
 	++srvStatData.sendClientMsgs;
-	srvStatData.sendCltMsgSize += (MsgHeaderLen + msgLen);
+	srvStatData.sendCltMsgSize += allMsgLen;
+    if (allMsgLen > srvStatData.sendCltMsgMaxLen) srvStatData.sendCltMsgMaxLen = allMsgLen;
 	
 	int rc = m_srvMsgComm->send(conn->proxyId, m_sndMsg, MsgHeaderLen + msgLen);
 	if (rc != Success)
 	{
 		--srvStatData.sendClientMsgs;
-	    srvStatData.sendCltMsgSize -= (MsgHeaderLen + msgLen);
+	    srvStatData.sendCltMsgSize -= allMsgLen;
 		++srvStatData.sendCltMsgFaileds;
 		
 		// static char logMsg[MaxMsgLen] = {0};
-		// b2str(m_sndMsg, MsgHeaderLen + msgLen, logMsg, MaxMsgLen);
+		// b2str(m_sndMsg, allMsgLen, logMsg, MaxMsgLen);
 		ReleaseErrorLog("send message to proxy failed, rc = %d, id = %d, protocol = %d, module = %d, len = %d",
-		rc, conn->proxyId, protocolId, moduleId, MsgHeaderLen + msgLen);
+		rc, conn->proxyId, protocolId, moduleId, allMsgLen);
 	}
 
 	return rc;
@@ -1131,8 +1285,23 @@ void CService::setServiceType(unsigned int srvType)
 
 void CService::setConnectClient()
 {
-	NEW(m_netMsgComm, CNetMsgComm());
+	NEW0(m_netMsgComm, CNetMsgComm);
 	m_connectMgr.setNetMsgComm(m_netMsgComm);
+}
+
+void CService::setGatewayServiceMode(bool isGatewayMode)
+{
+    m_gatewayServiceMode = isGatewayMode;
+}
+
+std::mutex* CService::setThreadMutexMode()
+{
+    if (m_mutex == NULL)
+    {
+        NEW0(m_mutex, std::mutex);
+    }
+    
+    return m_mutex;
 }
 
 // 该函数由网络层线程触发调用，因此需要队列做数据同步，否则调度线程和网络线程并发会导致错误
@@ -1256,9 +1425,15 @@ int IService::registerNetModule(CNetDataHandler* pInstance)
 	return getService().registerNetModule(pInstance);
 }
 
-void IService::stopService()
+void IService::stopService(int flag)
 {
-	return getService().stop();
+	return getService().stop(flag);
+}
+
+// 设置是否使用网关代理模式（目标服务收到网关服务的消息时，是否使用网关代理模式）
+void IService::setGatewayServiceMode(bool isGatewayMode)
+{
+    return getService().setGatewayServiceMode(isGatewayMode);
 }
 
 // 服务启动时调用
@@ -1281,6 +1456,19 @@ void IService::onUpdateConfig(const char* name, const unsigned int id)
 int IService::onHandle()
 {
 	return NoLogicHandle;
+}
+
+// 收到外部数据之后调用 onReceiveMessage
+// 发送外部数据之前调用 onSendMessage
+// 一般用于数据加密&解密
+int IService::onReceiveMessage(NConnect::Connect* conn, char* msg, unsigned int& len)
+{
+    return Success;
+}
+
+int IService::onSendMessage(NConnect::Connect* conn, char* msg, unsigned int& len)
+{
+    return Success;
 }
 
 // 通知逻辑层对应的连接已被关闭

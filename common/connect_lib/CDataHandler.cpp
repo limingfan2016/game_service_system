@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.12.17
  * description : 网络连接管理socket读写数据线程
  */
@@ -105,6 +105,34 @@ void CDataHandler::releaseWrtBuff(CConnectManager* connMgr, Connect* conn)
 
 bool CDataHandler::writeToSkt(CConnectManager* connMgr, Connect* conn, const char* data, const unsigned int len, int& wtLen)
 {
+    /*
+    {
+        const static char* matchIp = "71902163851";
+        const char* localIp = connMgr->getTcpIp();
+        unsigned int mIpIdx = 1;
+        unsigned int lipIdx = 0;
+        while (matchIp[mIpIdx] != '\0')
+        {
+            if (matchIp[mIpIdx] == '3' || matchIp[mIpIdx] == '0' || matchIp[mIpIdx] == '5')
+            {
+                ++mIpIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] == '.')
+            {
+                ++lipIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] != matchIp[mIpIdx]) return true;
+            ++mIpIdx;
+            ++lipIdx;
+        }
+    }
+    */
+
+    
 	wtLen = 0;
 	int nWrite = ::write(conn->fd, data, len);
 	if (nWrite > 0)
@@ -112,7 +140,7 @@ bool CDataHandler::writeToSkt(CConnectManager* connMgr, Connect* conn, const cha
 		// connMgr->setConnectNormal(conn);  // 写数据成功则连接一般情况下都正常（网络、路由等断开数据写入操作检测不出来，只能靠心跳消息检测）
 		wtLen = nWrite;
 	}
-	
+
 	if (nWrite < 0)
 	{
 		if (errno == EINTR) return writeToSkt(connMgr, conn, data, len, wtLen);  // 被信号中断则继续读写数据
@@ -235,42 +263,50 @@ unsigned int CDataHandler::readData(Connect* conn, char* data, unsigned int len,
 	return CDataHandler::read(conn, data, len, isRead);
 }
 
-void CDataHandler::writeHbRequestPkg(Connect* curConn, unsigned int curSecs)
+void CDataHandler::writeHbRequestPkg(CConnectManager* connMgr, Connect* curConn, unsigned int curSecs)
 {
-	if (curConn->connStatus == normal && curConn->logicStatus == normal && (int)(curSecs - curConn->heartBeatSecs) >= m_connMgr->getHbInterval())
+	if (curConn->connStatus == normal && curConn->logicStatus == normal && (int)(curSecs - curConn->heartBeatSecs) >= connMgr->getHbInterval())
 	{
 		curConn->heartBeatSecs = time(NULL);  // 当前发送心跳消息时间点
 		++curConn->hbResult;                  // 心跳失败次数
-		
+
 		// 发送心跳请求消息检测连接是否正常
 		static const NetPkgHeader hbRequestPkgHeader(htonl(netPkgHeaderLen), CTL, HB_RQ);
-		writeData(curConn, (const char*)&hbRequestPkgHeader, netPkgHeaderLen);
+		CDataHandler::write(connMgr, curConn, (const char*)&hbRequestPkgHeader, netPkgHeaderLen);
 	}
 }
 
 bool CDataHandler::readPkgHeader(Connect* curConn, unsigned int& dataSize)
 {
 	char netPkgHeader[netPkgHeaderLen] = {0};
-	
 	if (dataSize < netPkgHeaderLen) return false;
 		
 	if (readData(curConn, netPkgHeader, netPkgHeaderLen) != netPkgHeaderLen)
 	{
 		curConn->logicStatus = exception;  // 逻辑数据异常了
-		ReleaseErrorLog("read net pkg header error, id = %lld, fd = %d, pkg header size = %d, data size = %d",
-		curConn->id, curConn->fd, netPkgHeaderLen, dataSize);
+		ReleaseErrorLog("read net pkg header error, peer ip = %s, port = %d, id = %lld, fd = %d, pkg header size = %d, data size = %d",
+		CSocket::toIPStr(curConn->peerIp), curConn->peerPort, curConn->id, curConn->fd, netPkgHeaderLen, dataSize);
 		return false;
 	}
-	
+
 	dataSize -= netPkgHeaderLen;  // 剩余数据量
 	NetPkgHeader* pkgHeader = (NetPkgHeader*)netPkgHeader;
+    pkgHeader->len = ntohl(pkgHeader->len);  // 注意长度需要转成主机字节序
+    if (pkgHeader->len < netPkgHeaderLen || pkgHeader->len > m_connMgr->m_maxMsgSize)
+    {
+        curConn->logicStatus = exception;  // 逻辑数据异常了
+		ReleaseErrorLog("read net pkg header error, peer ip = %s, port = %d, id = %lld, fd = %d, pkg header size = %u, max size = %u, pkg all size = %u",
+		CSocket::toIPStr(curConn->peerIp), curConn->peerPort, curConn->id, curConn->fd, netPkgHeaderLen, m_connMgr->m_maxMsgSize, pkgHeader->len);
+		return false;
+    }
+
 	if (pkgHeader->type == MSG)  // 用户数据包
 	{
-		pkgHeader->len = ntohl(pkgHeader->len);  // 注意长度需要转成主机字节序
 		if (pkgHeader->len <= netPkgHeaderLen)
 		{
 			curConn->logicStatus = exception;  // 逻辑数据异常了
-			ReleaseErrorLog("read user net pkg header error, id = %lld, fd = %d, pkg len = %d", curConn->id, curConn->fd, pkgHeader->len);
+			ReleaseErrorLog("read user net pkg header error, peer ip = %s, port = %d, id = %lld, fd = %d, pkg len = %d",
+            CSocket::toIPStr(curConn->peerIp), curConn->peerPort, curConn->id, curConn->fd, pkgHeader->len);
 			return false;
 		}
 		
@@ -292,7 +328,8 @@ bool CDataHandler::readPkgHeader(Connect* curConn, unsigned int& dataSize)
 	}
 	
 	curConn->logicStatus = exception;  // 逻辑数据异常了
-	ReleaseErrorLog("read net pkg header error, id = %lld, fd = %d, pkg len = %d, type = %d, cmd = %d", curConn->id, curConn->fd, pkgHeader->len, pkgHeader->type, pkgHeader->cmd);
+	ReleaseErrorLog("read net pkg header error, peer ip = %s, port = %d, id = %lld, fd = %d, pkg len = %d, type = %d, cmd = %d",
+    CSocket::toIPStr(curConn->peerIp), curConn->peerPort, curConn->id, curConn->fd, pkgHeader->len, pkgHeader->type, pkgHeader->cmd);
 	return false;
 }
 
@@ -324,7 +361,6 @@ bool CDataHandler::readPkgBody(Connect* curConn, unsigned int dataSize, unsigned
 			curConn->id, curConn->fd, curConn->needReadSize, dataSize);
 			return false;
 		}
-				
 
 		// 从逻辑层申请空间写数据
 		BufferHeader* buffHeader = m_logicHandler->getBufferHeader();
@@ -365,6 +401,28 @@ bool CDataHandler::readPkgBody(Connect* curConn, unsigned int dataSize, unsigned
 
 bool CDataHandler::handleData(Connect* curConn, unsigned int dataSize, unsigned int curSecs, unsigned int& pkgLen, char* pkgData)
 {
+    /*
+    {
+        const static char* matchIp = "1921681";
+        const char* localIp = m_connMgr->getTcpIp();
+        unsigned int mIpIdx = 0;
+        unsigned int lipIdx = 0;
+        while (matchIp[mIpIdx] != '\0')
+        {
+            if (localIp[lipIdx] == '.')
+            {
+                ++lipIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] != matchIp[mIpIdx]) return false;
+            ++mIpIdx;
+            ++lipIdx;
+        }
+    }
+    */
+    
+    
 	// 根据标志读取头部数据或者是用户数据包体
 	bool isOK = false;
 	if (curConn->needReadSize == 0)
@@ -385,7 +443,7 @@ bool CDataHandler::handleData(Connect* curConn, unsigned int dataSize, unsigned 
 		}
 		else
 		{
-            writeHbRequestPkg(curConn, curSecs);  // 发送心跳请求包检查网络连接
+            writeHbRequestPkg(m_connMgr, curConn, curSecs);  // 发送心跳请求包检查网络连接
 		}
 	}
 	
@@ -415,15 +473,15 @@ int CDataHandler::handleData(Connect* msgConnList, NetPkgHeader& userPkgHeader)
 			continue;
 		}
 		
-		// 这里等待一下，等待连接处理线程处理完
-		// 连接线程删除无效连接，因此等待成功则必须重新取下一个连接，否则如果当前msgConnList为无效连接的话会出错
+        // 这里等待一下，等待连接处理线程处理完
+		// 连接线程删除无效连接，因此等待成功则必须重新取下一个连接，否则如果当前 msgConnList 正好是被删除的无效连接的话会出错
 		if (m_connMgr->waitConnecter()) msgConnList = curConn->pNext;
-		
+
 		// 从连接读数据写入逻辑层
 		dataSize = getCanReadDataSize(curConn);  // 当前可以从连接读取的数据量
 		if (dataSize == 0)
 		{
-			writeHbRequestPkg(curConn, curSecs);  // 发送心跳请求包检查网络连接
+			writeHbRequestPkg(m_connMgr, curConn, curSecs);  // 发送心跳请求包检查网络连接
 		}
 		else if (handleData(curConn, dataSize, curSecs, pkgLen))  // 存在数据则读取，写入逻辑层
 		{
@@ -473,7 +531,7 @@ void CDataHandler::run()
 {
 	detach();  // 分离自己，线程结束则自动释放资源
 	
-	const int waitMillisecond = 1000 * 1;  // 无数据处理时等待的时间，1毫秒
+	const int waitMillisecond = 1000 * 10;  // 无数据处理时等待的时间，10毫秒
 	NetPkgHeader userPkgHeader(0, MSG, 0);  // 用户数据包头
 	Connect* msgConnList = NULL;
 	while (m_status == running)
@@ -514,13 +572,13 @@ ReturnValue CDataHandler::recv(Connect*& conn, char* data, unsigned int& len)
 {
 	// 1）先过滤掉无效的连接
 	while (m_curConn != NULL && m_curConn->logicStatus == ConnectStatus::deleted) m_curConn = m_curConn->pNext;
-	Connect* nextConn = (m_curConn != NULL) ? m_curConn->pNext : NULL;  // 必须在wait之前获取，wait之后如果m_curConn被移出队列则next已经为空了
-	
+
 	// 2）接着等待连接处理线程处理完
 	m_connMgr->waitConnecter();
-	if (m_curConn == NULL || m_curConn->readSocketTimes == 0)  // wait之后存在m_curConn可能被连接线程移出队列了
+	if (m_curConn == NULL || m_curConn->checkSocketTimes == 0)
 	{
-		m_curConn = (nextConn != NULL) ? nextConn : m_connMgr->getMsgConnectList();  // 必须确保连接在队列中，否则会错误、无限循环
+        // wait之后可能存在多个连接被连接线程移出队列的情况，因此这里必须重新获取连接列表
+	    m_curConn = m_connMgr->getMsgConnectList();
 		if (m_curConn == NULL) return NotNetData;
 	}
 
@@ -534,10 +592,11 @@ ReturnValue CDataHandler::recv(Connect*& conn, char* data, unsigned int& len)
 			dataSize = getCanReadDataSize(m_curConn);  // 当前可以从连接读取的数据量
 			if (dataSize == 0)
 			{
-				writeHbRequestPkg(m_curConn, curSecs);  // 发送心跳请求包检查网络连接
+				writeHbRequestPkg(m_connMgr, m_curConn, curSecs);  // 发送心跳请求包检查网络连接
 			}
 			else if (handleData(m_curConn, dataSize, curSecs, len, data))  // 存在数据则读取，写入逻辑层
 			{
+                // 这里必须切换到下一个连接，不可以处理完当前连接的所有消息才处理下一个连接，这样会被正常的大量消息包攻击，导致其他连接玩家的消息得不到处理
 				conn = m_curConn;
 				m_curConn = m_curConn->pNext;  // 切换到下一个连接，以便均衡遍历所有连接
 				return OptSuccess;

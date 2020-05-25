@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.04.23
  * description : 类型定义
  */
@@ -24,7 +24,7 @@ namespace NHttp
 static const unsigned int MaxReceiveNetBuffSize = 10240;
 static const unsigned int MaxNetBuffSize = 8192;
 static const unsigned int MaxDataQueueSize = 8192;
-static const unsigned int MaxRequestDataLen = 4096;
+static const unsigned int MaxRequestDataLen = 8192;
 static const unsigned int MaxRequestBufferCount = 32;
 static const unsigned int MaxConnectDataCount = 32;
 static const unsigned int MaxKeySize = 36;

@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.05.08
  * description : xml解析生成代码API
  */
@@ -142,7 +142,8 @@ DOMElement* ReadXml::getDocumentRoot(const char* xmlConfigFile)
 void CXmlConfig::getChildNode(DOMNode* parentNode, DomNodeArray& domNodeArray, const string& parentName, const string& nodeName, const string& typeValue)
 {
 	DOMNodeList* nodeList = parentNode->getChildNodes();
-	for (unsigned int i = 0; i < nodeList->getLength(); ++i)
+    const unsigned int length = nodeList->getLength();
+	for (unsigned int i = 0; i < length; ++i)
 	{
 		getNode(nodeList->item(i), domNodeArray, parentName, nodeName, typeValue);
 	}
@@ -151,7 +152,8 @@ void CXmlConfig::getChildNode(DOMNode* parentNode, DomNodeArray& domNodeArray, c
 void CXmlConfig::getChildNode(DOMNode* parentNode, const string& typeName, const string& typeValue, DomNodeArray& domNodeArray)
 {
 	DOMNodeList* nodeList = parentNode->getChildNodes();
-	for (unsigned int i = 0; i < nodeList->getLength(); ++i)
+	const unsigned int length = nodeList->getLength();
+	for (unsigned int i = 0; i < length; ++i)
 	{
 		getNode(nodeList->item(i), typeName, typeValue, domNodeArray);
 	}
@@ -227,7 +229,8 @@ string CXmlConfig::getValue(DOMNode* parentNode, const string& itemName)
 	}
 	
 	DOMNodeList* nodeList = parentNode->getChildNodes();
-	for (unsigned int i = 0; i < nodeList->getLength(); ++i)
+	const unsigned int length = nodeList->getLength();
+	for (unsigned int i = 0; i < length; ++i)
 	{
 		DOMNode* nodeTemp = nodeList->item(i);
 		if (nodeTemp->getNodeType() == DOMNode::ELEMENT_NODE)

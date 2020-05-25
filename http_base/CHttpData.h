@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.11.17
  * description : Http 数据处理
  */
@@ -72,6 +72,9 @@ public:
 	CHttpRequest(HttpMsgType msgType);
 	~CHttpRequest();
 
+public:
+    void setMsgType(HttpMsgType msgType);
+    
 public:
 	void setParam(const string& param);
 	void setParam(const char* param, const unsigned int len);

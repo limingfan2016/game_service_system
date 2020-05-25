@@ -1,9 +1,10 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.02.06
  * description : 进程管理操作
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include "CProcess.h"
@@ -53,6 +54,23 @@ int CProcess::toDaemon()
 	return SystemCallErr;
 }
 
+// 执行命令
+int CProcess::doCommand(const char* cmd)
+{
+    if (cmd == NULL || *cmd == '\0') return InvalidParam;
+    
+    errno = 0;
+	const int status = ::system(cmd);
+    const bool isOk = (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    if (!isOk)
+    {
+        ReleaseErrorLog("call system do command error, cmd = %s, status = %d, error = %d, info = %s", cmd, status, errno, strerror(errno));
+
+		return SystemCallErr;
+    }
+    
+    return Success;
+}
 
 }
 

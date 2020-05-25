@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.15
  * description : 消息数据结构类型
  */
@@ -18,9 +18,9 @@ namespace NMsgComm
 {
 
 // 相对共享内存头部的偏移量
-typedef unsigned int BuffIndex;
-typedef unsigned int QueueIndex;
-typedef unsigned int HandlerIndex;
+typedef ulong64_t BuffIndex;
+typedef ulong64_t QueueIndex;
+typedef ulong64_t HandlerIndex;
 
 
 // 节点状态
@@ -74,7 +74,7 @@ struct ShmData
 	QueueIndex msgQueueList;         // 剩余可用的共享内存块
 	HandlerIndex msgHandlerList;     // 剩余可用的消息处理者对应的内存块
 	
-	unsigned int msgQueueSize;       // 用户配置的总共享内存大小，其值和配置大小一致则表示共享内存已经初始化可用，否则共享内存不可用
+	ulong64_t msgQueueSize;          // 用户配置的总共享内存大小，其值和配置大小一致则表示共享内存已经初始化可用，否则共享内存不可用
 	SharedMutex sharedMutex;         // 进程间共享锁，进程申请共享内存块的时候需要加锁
 };
 

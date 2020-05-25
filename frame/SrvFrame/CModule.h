@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.30
  * description : 服务开发模块API定义实现
  */
@@ -8,6 +8,7 @@
 #define CMODULE_H
 
 #include <unordered_map>
+#include <mutex>
 
 #include "IService.h"
 #include "CConnectMgr.h"
@@ -58,6 +59,9 @@ DISABLE_COPY_ASSIGN(CHandler);
 // 服务消息上下文内容
 struct Context
 {
+    // 消息ID
+    unsigned int msgId;
+    
 	// 消息源端
 	unsigned int srcSrvId;
 	unsigned short srcSrvType;
@@ -97,7 +101,7 @@ public:
 	unsigned short getModuleId();
 	
 	// 停止退出服务
-    void stopService();
+    void stopService(int flag = 1);
 	
     // 获取服务ID，主要用于发送服务消息
     unsigned int getServiceId(const char* serviceName);
@@ -130,9 +134,15 @@ public:
 	                unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId = 0, unsigned int msgId = 0);
 
 public:
+    // 需要和调度线程并发加锁的，调用该函数即可
+    // 用法如下：
+    // CLockEx lock(setThreadMutexMode());
+    std::mutex* setThreadMutexMode();  // 框架调度线程和gRPC线程并发，需要加锁
+
+public:
     // 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
-	unsigned int setTimer(unsigned int interval, TimerHandler timerHandler, int userId = 0, void* param = NULL, unsigned int count = 1, CHandler* instance = NULL);
-	void killTimer(unsigned int timerId);
+	unsigned int setTimer(unsigned int interval, TimerHandler timerHandler, int userId = 0, void* param = NULL, unsigned int count = 1, CHandler* instance = NULL, unsigned int paramLen = 0);
+	void* killTimer(unsigned int timerId, int* userId = NULL, unsigned int* paramLen = NULL);
 
     // 服务开发者实现的接口
 private:
@@ -165,6 +175,8 @@ protected:
 	
 	CService* m_service;
 	CConnectMgr* m_connectMgr;
+
+    Context m_context;
 	MessageType m_msgType;
 
 	CCfg* m_srvMsgCommCfg;  // 服务间消息通信配置信息
@@ -173,7 +185,6 @@ private:
     ProtocolIdToHandler m_serviceProtocolHandler;
 	
     unsigned short m_moduleId;
-	Context m_context;
 
 
     friend class CService;

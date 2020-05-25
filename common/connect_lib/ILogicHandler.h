@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.12.16
  * description : 连接管理使用者，上层业务逻辑需实现的接口
  */
@@ -33,6 +33,10 @@ enum ReturnValue
 	
 	NotNetData = 11,                         // 无网络数据可收
 	SendDataCloseConnect = 12,               // logic 层要求连接里的数据发送完毕后直接关闭连接
+    
+    PeerIpInBlackList = 13,                  // 连接对端的IP，在黑名单中
+    PeerIpWhiteListMode = 14,                // 连接对端的IP，开启白名单模式
+    PeerIpInvalid = 15,                      // 连接对端的IP，无效的IP值
 };
 
 
@@ -137,6 +141,10 @@ public:
 public:
     // 设置连接收发数据接口对象
 	virtual void setConnMgrInstance(IConnectMgr* instance) = 0;
+    
+public:
+    // 检查连接对端的IP是否合法，IP地址白名单&黑名单使用
+    virtual ReturnValue checkPeerIp(unsigned int peerIp) {return ReturnValue::OptSuccess;}
 };
 
 }

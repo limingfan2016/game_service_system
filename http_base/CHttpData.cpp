@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.11.17
  * description : Http 数据处理
  */
@@ -312,6 +312,11 @@ CHttpRequest::~CHttpRequest()
 {
 }
 
+void CHttpRequest::setMsgType(HttpMsgType msgType)
+{
+    m_msgType = msgType;
+}
+
 void CHttpRequest::setParam(const string& param)
 {
 	m_param = param;
@@ -395,13 +400,22 @@ const char* CHttpResponse::getMessage(char* buffer, unsigned int& len)
 
 	// "HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\nsuccess" : "HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\nfailure";
 	const unsigned int bufferSize = len;
-	len = snprintf(buffer, bufferSize - 1, "HTTP/1.1 200 OK\r\n");
+    int msgLen = snprintf(buffer, bufferSize - 1, "HTTP/1.1 200 OK\r\n");
+    if (msgLen < 1) return NULL;
+    
+	len = msgLen;
 	for (ParamKey2Value::const_iterator it = m_paramKey2Value.begin(); it != m_paramKey2Value.end(); ++it)
 	{
-		len += snprintf(buffer + len, bufferSize - len - 1, "%s: %s\r\n", it->first.c_str(), it->second.c_str());
+		msgLen = snprintf(buffer + len, bufferSize - len - 1, "%s: %s\r\n", it->first.c_str(), it->second.c_str());
+        if (msgLen < 1) return NULL;
+        
+        len += msgLen;
 	}
 	
-	len += snprintf(buffer + len, bufferSize - len - 1, "Content-Length: %u\r\n\r\n%s", (unsigned int)m_content.length(), m_content.c_str());
+	msgLen = snprintf(buffer + len, bufferSize - len - 1, "Content-Length: %u\r\n\r\n%s", (unsigned int)m_content.length(), m_content.c_str());
+    if (msgLen < 1) return NULL;
+    
+    len += msgLen;
 	buffer[len] = 0;
 	
 	return buffer;

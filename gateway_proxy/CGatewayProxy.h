@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.10.12
  * description : 网关代理服务实现
  */
@@ -9,8 +9,7 @@
 
 #include "SrvFrame/IService.h"
 #include "SrvFrame/CGameModule.h"
-#include "common/CommonType.h"
-#include "db/CRedis.h"
+#include "common/CServiceOperation.h"
 #include "TypeDefine.h"
 
 
@@ -23,12 +22,20 @@ class CSrvMsgHandler : public NFrame::CGameModule
 public:
 	CSrvMsgHandler();
 	~CSrvMsgHandler();
+    
+public:
+    bool inline need_encrypt_data() const
+    {
+        return (m_pCfg->commonCfg.need_encrypt_data == 1);
+    }
 	
 private:
-    void saveDataToDb(unsigned int timerId, int userId, void* param, unsigned int remainCount);
-	int stopServiceConnect(unsigned int srcSrvId);
+	// 定时把数据更新到loginlist服务
+	void updateInfo2LoginList(uint32_t timerId, int userId, void* param, uint32_t remainCount);
 
-	
+	int stopServiceConnect(unsigned int srcSrvId);
+    ConnectUserData* getConnectUserData(Connect* conn, unsigned int serviceId, unsigned short protocolId, unsigned int ip = 0, unsigned short port = 0);
+
 private:
     virtual void onLoad(const char* srvName, const unsigned int srvId, unsigned short moduleId);
 	virtual void onUnLoad(const char* srvName, const unsigned int srvId, unsigned short moduleId);
@@ -46,21 +53,24 @@ private:
 						         unsigned short srcProtocolId, int userFlag, unsigned int msgId, const char* srvAsyncDataFlag, unsigned int srvAsyncDataFlagLen);
 	
 public:
-	void onUpdateConfig();     // 服务配置更新
+	void onUpdateConfig(bool isReset);     // 服务配置更新
 	
 	void onClosedConnect(void* userData);   // 通知逻辑层对应的逻辑连接已被关闭
 	
-	
+public:
+    const NGatewayProxyConfig::GatewayConfig* m_pCfg;
+
 private:
-	NDBOpt::CRedis m_redisDbOpt;
+    NProject::CServiceOperation m_srvOpt;
 	NProject::GatewayProxyServiceData m_gatewayProxySrvData;
 
 	IndexToConnects m_idx2Connects;
 	unsigned int m_connectIndex;
-	
-	unsigned int m_gameHallId;
-	
-	
+    
+    ServiceTypeBitArray m_serviceType;
+    ServiceIntervalMaxPkgCount m_serviceMaxPkgCount;
+
+
 DISABLE_COPY_ASSIGN(CSrvMsgHandler);
 };
 
@@ -77,10 +87,16 @@ private:
 	virtual void onUnInit(const char* name, const unsigned int id);           // 服务停止时被调用
 	virtual void onRegister(const char* name, const unsigned int id);         // 服务启动后被调用，服务需在此注册本服务的各模块信息
 	virtual void onUpdateConfig(const char* name, const unsigned int id);     // 服务配置更新
+    
+private:
+    // 收到外部数据之后调用 onReceiveMessage
+    // 发送外部数据之前调用 onSendMessage
+    // 一般用于数据加密&解密
+    virtual int onReceiveMessage(NConnect::Connect* conn, char* msg, unsigned int& len);
+    virtual int onSendMessage(NConnect::Connect* conn, char* msg, unsigned int& len);
 	
 private:
 	virtual void onClosedConnect(void* userData);                             // 通知逻辑层对应的逻辑连接已被关闭
-
 
 private:
     CSrvMsgHandler* m_connectNotifyToHandler;

@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.15
  * description : 各服务间消息通信中间件
  */

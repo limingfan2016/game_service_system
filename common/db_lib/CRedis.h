@@ -1,5 +1,5 @@
 
-/* author : liuxu
+/* author : admin
  * date : 2015.01.30
  * description :  redis client api
  */

@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.06.30
  * description : 纯网络数据读写，不做数据解析、心跳监测等其他额外操作
  */

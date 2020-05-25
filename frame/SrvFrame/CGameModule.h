@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.03.27
  * description : 游戏逻辑开发框架API
  */
@@ -19,7 +19,7 @@ struct NetClientContext
 	unsigned int serviceId;       // 服务ID
 	unsigned short moduleId;        // 服务下的模块ID
 	unsigned short protocolId;      // 模块下的协议ID
-	unsigned int msgId;             // 消息ID
+
     Connect* conn;                  // 当前消息对应的连接
 };
 
@@ -51,7 +51,7 @@ private:
 	int onClientMessage(const char* msgData, const unsigned int msgLen, const unsigned int msgId,
 						unsigned int serviceId, unsigned short moduleId, unsigned short protocolId, Connect* conn);
 	
-private:
+protected:
 	NetClientContext m_netClientContext;
     ProtocolIdToHandler* m_clientProtocolHanders;
 

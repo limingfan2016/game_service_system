@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.10.28
  * description : 提供各种日志输出、日志管理功能
  */
@@ -24,9 +24,15 @@ namespace NCommon
 {
 
 static const char* LogLvStr[] = {
+    "",
+    "",
 	"INFO|",
 	"WARN|",
 	"ERROR|",
+    "BUSINESS|",
+    "DEV|",
+    "TEST|",
+    "PRODUCT|",
 };
 
 CLogger::CLogger(const char* pFullName, long size, int maxBakFile, int output)
@@ -39,8 +45,10 @@ CLogger::CLogger(const char* pFullName, long size, int maxBakFile, int output)
 	m_maxBakFile = (maxBakFile > 0) ? maxBakFile : 1;
 	m_idx = 1;
 	m_fd = -1;
-	m_output = output;
-	
+    
+    m_output = 0;
+    setOutput(output);
+
 	m_writeErrTimes = 0;     // 连续写多少次失败后，重新关闭&打开文件
 	m_tryTimes = 0;          // 连续尝试打开多少次文件失败后，关闭日志功能
 	memset(m_fullName, 0, sizeof(m_fullName));
@@ -234,9 +242,42 @@ void CLogger::closeFile()
 	m_fullName[0] = '\0';
 }
 
-void CLogger::setOutput(int v)
+void CLogger::setOutput(int value)
 {
-	m_output = v;
+    m_output = value;
+    if (m_output <= 1) return;
+
+    /*
+    日志级别开关配置说明：
+    enum LogLevel {
+        Info = 2,
+        Warn = 3,
+        Error = 4,
+        Business = 5,
+        Dev = 6,
+        Test = 7,
+        Product = 8,
+    };
+
+    WriteDebugLog = 0       // 0值关闭日志
+    WriteDebugLog = 1       // 1值打开所有级别的日志
+
+    // 打开相关级别的日志，各级别对应的值 LogLevel 任意组合，如下配置：
+    WriteDebugLog = 2       // 只打开 Info 级别日志
+    WriteDebugLog = 45      // 只打开 Error、Business 级别日志
+    WriteDebugLog = 34      // 只打开 Warn、Error 级别日志
+    */
+
+    const unsigned int decimalValue = 10;
+    m_output = 0;
+    char* pOutputVal = (char*)&m_output;
+    int logLevel = 0;
+    while (value > 0)
+    {
+        logLevel = value % decimalValue;
+        if (logLevel > 1) BIT_SET(pOutputVal, logLevel);  // 各个日志级别使用位组合实现
+        value = value / decimalValue;
+    }
 }
 
 int CLogger::writeFile(const char* fileName, const int fileLine, const LogLevel logLv, const char* pFormat, ...)
@@ -246,7 +287,10 @@ int CLogger::writeFile(const char* fileName, const int fileLine, const LogLevel 
 		closeFile();
 		return 0;
 	}
-	
+    
+    // 各个日志级别开关，如果该级别 logLv 关闭则不写该级别的日志
+    if (m_output != 1 && !BIT_TST((const char*)&m_output, logLv)) return 0;
+
 	if (m_fd < 0 || !checkCurrentFileIsExist())
 	{
 		closeFile();

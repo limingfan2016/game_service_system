@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.10.12
  * description : 游戏逻辑处理驱动
  */
@@ -34,22 +34,22 @@ int CLogicHandler::onProxyMessage(const char* msgData, const unsigned int msgLen
 {
 	if (protocolId >= MaxProtocolIDCount)
 	{
-		ReleaseErrorLog("receive proxy msg error, protocolId = %d", protocolId);
+		ReleaseErrorLog("receive proxy msg error, serviceId = %u, protocolId = %d", serviceId, protocolId);
 		return InvalidParam;
 	}
 
 	ProtocolIdToHandler::const_iterator handlerIt = m_proxyProtocolHanders->find(protocolId);
 	if (handlerIt == m_proxyProtocolHanders->end() || handlerIt->second.handler == NULL)
 	{
-		ReleaseErrorLog("not find the protocol handler for proxy msg, protocolId = %d", protocolId);
+		ReleaseErrorLog("not find the protocol handler for proxy msg, serviceId = %u, protocolId = %d", serviceId, protocolId);
 		return NoFoundProtocolHandler;
 	}
 	
 	// 填写消息上下文信息
+    m_context.msgId = msgId;
 	m_connectProxyContext.serviceId = serviceId;
 	m_connectProxyContext.moduleId = moduleId;
 	m_connectProxyContext.protocolId = protocolId;
-	m_connectProxyContext.msgId = msgId;
 	m_connectProxyContext.conn = conn;
 	
 	if (onPreHandleMessage(msgData, msgLen, m_connectProxyContext))
@@ -59,8 +59,8 @@ int CLogicHandler::onProxyMessage(const char* msgData, const unsigned int msgLen
 		(handlerIt->second.instance->*(handlerIt->second.handler))(msgData, msgLen, serviceId, moduleId, protocolId);
 	}
 
+    m_context.msgId = 0;
 	m_connectProxyContext.protocolId = (unsigned short)-1;
-	m_connectProxyContext.msgId = (unsigned int)-1;
 	m_connectProxyContext.conn = NULL;
 	
 	return Success;
@@ -142,7 +142,7 @@ void* CLogicHandler::getProxyUserData(ConnectProxy* conn)
 // 向目标网络代理发送消息
 int CLogicHandler::sendMsgToProxy(const char* msgData, const unsigned int msgLen, unsigned short protocolId, unsigned int serviceId, unsigned short moduleId)
 {
-	int rc = m_service->sendMsgToProxy(msgData, msgLen, m_connectProxyContext.msgId, serviceId, moduleId, protocolId, m_connectProxyContext.conn);
+	int rc = m_service->sendMsgToProxy(msgData, msgLen, m_context.msgId, serviceId, moduleId, protocolId, m_connectProxyContext.conn);
 	if (rc != Success) ReleaseErrorLog("send proxy message error1, msgLen = %u, serviceId = %d, moduleId = %d, protocolId = %d, rc = %d", msgLen, serviceId, moduleId, protocolId, rc);
 	return rc;
 }
@@ -150,6 +150,7 @@ int CLogicHandler::sendMsgToProxy(const char* msgData, const unsigned int msgLen
 int CLogicHandler::sendMsgToProxy(const char* msgData, const unsigned int msgLen, unsigned short protocolId,
 					              const char* userName, unsigned int serviceId, unsigned short moduleId, unsigned int msgId)
 {
+    if (msgId == 0) msgId = m_context.msgId;
     int rc = (userName != NULL) ? m_service->sendMsgToProxy(msgData, msgLen, msgId, serviceId, moduleId, protocolId, getConnectProxy(userName)) : InvalidParam;
 	if (rc != Success) ReleaseErrorLog("send proxy message error2, msgLen = %u, serviceId = %d, moduleId = %d, protocolId = %d, rc = %d, userName = %s",
 	msgLen, serviceId, moduleId, protocolId, rc, (userName != NULL) ? userName : "");
@@ -159,6 +160,7 @@ int CLogicHandler::sendMsgToProxy(const char* msgData, const unsigned int msgLen
 int CLogicHandler::sendMsgToProxy(const char* msgData, const unsigned int msgLen, unsigned short protocolId,
 	                              ConnectProxy* conn, unsigned int serviceId, unsigned short moduleId, unsigned int msgId)
 {
+    if (msgId == 0) msgId = m_context.msgId;
     int rc = m_service->sendMsgToProxy(msgData, msgLen, msgId, serviceId, moduleId, protocolId, conn);
 	if (rc != Success) ReleaseErrorLog("send proxy message error3, msgLen = %u, serviceId = %d, moduleId = %d, protocolId = %d, rc = %d", msgLen, serviceId, moduleId, protocolId, rc);
 	return rc;

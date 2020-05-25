@@ -1,5 +1,5 @@
 
-/* author : liuxu
+/* author : admin
 * date : 2015.01.09
 * description : 定时器
 */
@@ -31,6 +31,9 @@ namespace NCommon
 
 	CTimer::~CTimer()
 	{
+        m_isRun = false;
+		m_curTimerId = 0;
+
 		DELETE(m_pMemManager);
 		DELETE(m_pMutex);
 	}
@@ -72,7 +75,7 @@ namespace NCommon
 		pTimerInfo->runCounts = runCounts;
 		if (timeGap < 100)
 		{
-			timeGap = 100;
+			timeGap = 100;  // 支持的最小单位100毫秒
 		}
 		pTimerInfo->timeGap = timeGap;
 		pTimerInfo->pParam = pParam;
@@ -88,8 +91,11 @@ namespace NCommon
 
 	void CTimer::killTimer(unsigned int timerId)
 	{
-		CLock lock(*m_pMutex);
-		m_umapKillTimer[timerId] = true;
+        if (timerId > 0)
+        {
+            CLock lock(*m_pMutex);
+		    m_umapKillTimer[timerId] = true;
+        }
 	}
 
 	int CTimer::stopTimer()

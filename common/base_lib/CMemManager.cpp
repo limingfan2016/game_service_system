@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.16
  * description : 自动内存块内存池管理，快速高效的获取、释放内存，防止内存碎片
  */
@@ -190,13 +190,19 @@ bool CMemManager::createPool(const unsigned int count, const unsigned int size, 
 		{
 			DELETE(pMemPoolContainer);
 		}
+        else
+        {
+            CMemMonitor::getInstance().newMemPoolInfo(pMemPoolContainer, count, size + AddrSize);
+        }
 	}
 	return ok;
 }
 
 void CMemManager::destroyPool(MemPoolContainer* pMemPoolContainer)
 {
-	DELETE(pMemPoolContainer);
+    CMemMonitor::getInstance().deleteMemPoolInfo(pMemPoolContainer);
+
+    DELETE(pMemPoolContainer);
 }
 
 

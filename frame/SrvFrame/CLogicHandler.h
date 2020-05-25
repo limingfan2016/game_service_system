@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.10.12
  * description : 游戏逻辑处理驱动
  */
@@ -20,7 +20,7 @@ struct ConnectProxyContext
 	unsigned int serviceId;         // 服务ID
 	unsigned short moduleId;        // 服务下的模块ID
 	unsigned short protocolId;      // 模块下的协议ID
-	unsigned int msgId;             // 消息ID
+
     ConnectProxy* conn;             // 当前消息对应的连接代理
 };
 

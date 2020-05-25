@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.02.06
  * description : 进程管理操作
  */
@@ -35,6 +35,9 @@ public:
 	
 	// 把进程转变为守护进程
 	static int toDaemon();
+    
+    // 执行命令
+    static int doCommand(const char* cmd);
 	
 
 DISABLE_CLASS_BASE_FUNC(CProcess);  // 禁止实例化对象

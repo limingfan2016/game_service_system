@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.15
  * description : 各服务间消息通信中间件
  */
@@ -80,8 +80,8 @@ int CSrvMsgComm::createShm(const char* cfgFile)
 	
 	// 创建共享内存
 	// 申请的共享内存总大小
-    int shmSize = sizeof(ShmData) + sizeof(MsgHandlerList) * m_cfgData.ShmCount;   // 共享内存头部、网络节点
-	shmSize += ((m_cfgData.ShmSize + sizeof(MsgHandlerList) + sizeof(MsgQueueList)) * m_cfgData.ShmCount);
+    ulong64_t shmSize = sizeof(ShmData) + sizeof(MsgHandlerList) * (ulong64_t)m_cfgData.ShmCount;   // 共享内存头部、网络节点
+	shmSize += ((m_cfgData.ShmSize + sizeof(MsgHandlerList) + sizeof(MsgQueueList)) * (ulong64_t)m_cfgData.ShmCount);
 	int flag = 0666 | IPC_CREAT;  // 创建共享内存标识
 	int isNewCreate = 0;
 	int shmId = -1;
@@ -90,23 +90,22 @@ int CSrvMsgComm::createShm(const char* cfgFile)
 	if (rc != Success) return rc;
 
     // 初始化共享内存数据
+    const ulong64_t cfgShmSize = (ulong64_t)m_cfgData.ShmSize * (ulong64_t)m_cfgData.ShmCount;
     m_shmData = (ShmData*)pShm;
 	if (isNewCreate)
 	{
         rc = initShm();  // 共享内存新创建则初始化头部信息
 		if (rc != Success) return rc;
 		
-		ReleaseInfoLog("create new shared memory success, size = %u, config size = %u",
-		m_shmData->msgQueueSize, m_cfgData.ShmSize * m_cfgData.ShmCount);
+		ReleaseInfoLog("create new shared memory success, size = %llu, config size = %llu", m_shmData->msgQueueSize, cfgShmSize);
 	}
     else
 	{
 		initNetHandler();
-        ReleaseWarnLog("get already existent shared memory success, size = %u, config size = %u",
-		m_shmData->msgQueueSize, m_cfgData.ShmSize * m_cfgData.ShmCount);
+        ReleaseWarnLog("get already existent shared memory success, size = %llu, config size = %llu", m_shmData->msgQueueSize, cfgShmSize);
 	}
 
-	ReleaseInfoLog("open shared memory, pid = %lu, size = %d, key file = %s, key = 0x%x, shmId = %d\n",
+	ReleaseInfoLog("open shared memory, pid = %lu, size = %llu, key file = %s, key = 0x%x, shmId = %d\n",
 	                getpid(), shmSize, shmKeyFile, shmKey, shmId);
 
 	return Success;
@@ -120,10 +119,11 @@ void CSrvMsgComm::run()
 		return;
 	}
 	
-	if (m_shmData->msgQueueSize != (m_cfgData.ShmSize * m_cfgData.ShmCount))
+    const ulong64_t cfgShmSize = (ulong64_t)m_cfgData.ShmSize * (ulong64_t)m_cfgData.ShmCount;
+	if (m_shmData->msgQueueSize != cfgShmSize)
 	{
-		ReleaseErrorLog("create shared memory size = %d not equal the config size = %d, block size = %d, block count = %d",
-		m_shmData->msgQueueSize, m_cfgData.ShmSize * m_cfgData.ShmCount, m_cfgData.ShmSize, m_cfgData.ShmCount);
+		ReleaseErrorLog("create shared memory size = %llu not equal the config size = %llu, block size = %u, block count = %u",
+		m_shmData->msgQueueSize, cfgShmSize, m_cfgData.ShmSize, m_cfgData.ShmCount);
 		return;
 	}
 	
@@ -136,6 +136,8 @@ void CSrvMsgComm::run()
 	cfgData.count = atoi(CCfg::getValue("NetConnect", "ConnectCount"));                // 读写缓冲区内存池内存块个数
 	cfgData.step = cfgData.count;                 // 自动分配的内存块个数
 	cfgData.size = atoi(CCfg::getValue("NetConnect", "MsgQueueSize"));                 // 每个读写数据区内存块的大小
+    cfgData.maxMsgSize = atoi(CCfg::getValue("NetConnect", "MsgPkgMaxSize"));       // 最大消息包长度，单个消息包大小超过此长度则关闭连接
+    cfgData.checkConnectInterval = atoi(CCfg::getValue("NetConnect", "CheckConnectInterval"));   // 遍历所有连接时间间隔（检查连接活跃时间、心跳信息），单位毫秒
 	cfgData.activeInterval = atoi(CCfg::getValue("NetConnect", "ActiveTimeInterval"));       // 连接活跃检测间隔时间，单位秒，超过此间隔时间无数据则关闭连接
 	cfgData.checkTimes = atoi(CCfg::getValue("NetConnect", "CheckNoDataTimes"));             // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	cfgData.hbInterval = atoi(CCfg::getValue("NetConnect", "HBInterval"));           // 心跳检测间隔时间，单位秒
@@ -151,6 +153,9 @@ void CSrvMsgComm::run()
 	ST_ConnectMgr = &connectManager;
 	CProcess::installSignal(SignalNumber::StopProcess, NMsgComm::ExitProcess);  // 进程正常退出信号
 	CConfigManager::addUpdateNotify(NMsgComm::UpdateConfig);
+    
+    CMemMonitor::getInstance().outputMemInfo();   // 先输出进程启动后的内存监控信息
+    CMemMonitor::getInstance().setOutputValue();    // 再设置内存监控开关
 	
 	connectManager.run(NetConnectCount, WaitEventTimeOut);
 }
@@ -164,8 +169,8 @@ int CSrvMsgComm::initShm()
 	// 各个不同类型数据块在共享内存中的分布
 	// |1个ShmData |连续N个当前节点的 MsgHandlerList |连续N个网络节点的 MsgHandlerList |连续N个 MsgQueueList| 
 	HandlerIndex msgHandlerList = sizeof(ShmData);
-	HandlerIndex netMsgHandlerList = msgHandlerList + sizeof(MsgHandlerList) * m_cfgData.ShmCount;
-	QueueIndex msgQueueList = netMsgHandlerList + sizeof(MsgHandlerList) * m_cfgData.ShmCount;
+	HandlerIndex netMsgHandlerList = msgHandlerList + sizeof(MsgHandlerList) * (ulong64_t)m_cfgData.ShmCount;
+	QueueIndex msgQueueList = netMsgHandlerList + sizeof(MsgHandlerList) * (ulong64_t)m_cfgData.ShmCount;
 	
 	// 链接串成队列
 	MsgHandlerList* msgHandler = NULL;
@@ -232,7 +237,9 @@ int CSrvMsgComm::initShm()
 	}
 	
 	// 标识共享内存初始化成功，此时共享内存可用
-	m_shmData->msgQueueSize = m_cfgData.ShmSize * m_cfgData.ShmCount;
+	m_shmData->msgQueueSize = (ulong64_t)m_cfgData.ShmSize * (ulong64_t)m_cfgData.ShmCount;
+    
+    ReleaseInfoLog("init shared memory success, config size = %llu, block size = %u, block count = %u", m_shmData->msgQueueSize, m_cfgData.ShmSize, m_cfgData.ShmCount);
 	
 	return Success;
 }
@@ -426,11 +433,16 @@ int CSrvMsgComm::initCfgFile(const char* cfgFile)
 	if (rc != Success) return rc;
 	
 	// NetConnect 配置项值检查
-	const char* netConnectCfg[] = {"MsgQueueSize", "ActiveTimeInterval", "CheckNoDataTimes", "HBInterval", "HBFailTimes", "ConnectCount",};
+	const char* netConnectCfg[] = {"MsgQueueSize", "MsgPkgMaxSize", "CheckConnectInterval", "ActiveTimeInterval", "CheckNoDataTimes", "HBInterval", "HBFailTimes", "ConnectCount",};
 	for (int i = 0; i < (int)(sizeof(netConnectCfg) / sizeof(netConnectCfg[0])); ++i)
 	{
 		const char* value = CCfg::getValue("NetConnect", netConnectCfg[i]);
-		if (value == NULL || atoi(value) <= 1) return NetConnectCfgError;
+		if (value == NULL || atoi(value) <= 1)
+        {
+            ReleaseErrorLog("NetConnect config error, can not find item = %s", netConnectCfg[i]);
+            return NetConnectCfgError;
+        }
+        
 		if (i == 0 && atoi(value) < MinMsgQueueSize) return NetConnectCfgError;
 	}
 	
@@ -496,6 +508,11 @@ void CSrvMsgComm::updateConfig()
 	ReleaseInfoLog("receive update config notify");
 	
 	CCfg::reLoadCfg();  // 重新加载配置数据
+    
+    // 输出内存监控信息
+    CMemMonitor::getInstance().setOutputValue();
+    CMemMonitor::getInstance().outputMemInfo();
+            
 	unsigned int netNodeCount = 0;
 	int rc = getNetNodes(netNodeCount);
 	if (rc != Success || netNodeCount > m_cfgData.ShmCount)

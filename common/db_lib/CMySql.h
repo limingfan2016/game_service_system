@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.02.27
  * description : MySql数据库操作API封装
  */

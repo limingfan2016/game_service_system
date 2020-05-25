@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.07.01
  * description : Http 服务简单实现
  */
@@ -91,6 +91,11 @@ public:
 	
 	// 注册http应答消息处理函数
 	void registerHttpReplyHandler(unsigned int requestId, HttpReplyHandler handler, CHandler* instance);
+    
+    // 清理删除注册消息处理函数
+    void clearGetOptHandler();
+    void clearPostOptHandler();
+    void clearHttpReplyHandler();
 
 private:	
 	int onHandle();  // 主动发送的http请求收到应答消息

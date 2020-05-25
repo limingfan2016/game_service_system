@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.10.20
  * description : 内存块内存池快速高效的获取访问，防止内存频繁操作导致内存碎片
  */

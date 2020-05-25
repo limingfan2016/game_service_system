@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.17
  * description : 共享内存操作，共享内存管理进程间通信实现
  */
@@ -23,7 +23,7 @@ public:
 	static int unLockFile(int fd, int lockPos);                                              // 解锁共享内存key对应的文件
 	
 public:
-	static int create(int key, int size, int flag, int& isCreate, int& shmId, char*& pShm);  // 进程向操作系统申请共享内存空间
+	static int create(int key, ulong64_t size, int flag, int& isCreate, int& shmId, char*& pShm);  // 进程向操作系统申请共享内存空间
 	static int atShm(int key, int& shmId, char*& pShm);                                      // 挂接共享内存
 	static int release(void*& shm);                                                          // 进程脱离共享内存
 	
@@ -61,14 +61,14 @@ public:
 	
 public:
     // 只读打开共享内存，以便跟踪共享内存统计数据信息
-    int trace(const unsigned int srcId, const unsigned int dstId, const int size);
+    int trace(const unsigned int srcId, const unsigned int dstId, const ulong64_t size);
 	
     // 打开共享内存，不存在则创建
 	// srcId为本进程逻辑ID，dstId为通信对端进程逻辑ID
 	// size为共享内存大小，实际会分配2倍size大小的共享内存，分别为读写数据2条队列
 	// 每个进程只能调用open一次，多次操作将返回失败
 	// 在进程1打开一个和进程2通信的共享内存：open(1, 2, 10240 * 1024)
-	int open(const unsigned int srcId, const unsigned int dstId, const int size);
+	int open(const unsigned int srcId, const unsigned int dstId, const ulong64_t size);
 	
 	// 此处不会调用shmctl删除共享内存，否则其他进程将映射不到该共享内存空间
 	// 共享内存为双方通信进程共用，因此需要外部确认而手动删除
@@ -101,7 +101,7 @@ private:
 	// isCreate如果为true则不存在就创建共享内存
 	// 每个进程只能调用open一次，多次操作将返回失败
 	// 在进程1打开一个和进程2通信的共享内存：open(1, 2, 10240 * 1024)
-	int open(const unsigned int srcId, const unsigned int dstId, const int size, const int isCreate);
+	int open(const unsigned int srcId, const unsigned int dstId, const ulong64_t size, const int isCreate);
 	
 private:
     // 禁止拷贝、赋值

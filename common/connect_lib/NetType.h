@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.19
  * description : 网络管理模块各种类型定义
  */
@@ -58,7 +58,7 @@ struct Connect
 	int userId;                               // 用户挂接的ID
 	uuid_type id;                             // 连接ID
 	int fd;                                   // 连接socket描述符
-	unsigned short readSocketTimes;           // 从socket读取，没有数据的次数
+	unsigned short checkSocketTimes;           // 按一定时间间隔检查socket，没有数据的次数
 	unsigned short peerPort;                  // 连接对端的端口号
 	struct in_addr peerIp;                    // 连接对端的ip
 	
@@ -86,7 +86,7 @@ struct SynNotify
 	CMutex waitConnecterMutex;      // 数据读写线程等待连接线程
 	CCond waitConnecterCond;        // 条件变量通知
 	
-	int status;                     // parallel 0:并发执行； waitDH 1:连接线程等待数据处理线程； waitConn 2:数据处理线程等待连接线程
+	volatile int status;                     // parallel 0:并发执行； waitDH 1:连接线程等待数据处理线程； waitConn 2:数据处理线程等待连接线程
 };
 
 
@@ -102,20 +102,25 @@ enum CtlFlag
 {
 	HB_RQ = 0,        // 心跳请求包，发往对端
 	HB_RP = 1,        // 心跳应答包，来自对端
+
+	BLACK_LIMIT = 2,  // 黑名单限制包，发往对端后服务器关闭连接
+	WHITE_LIMIT = 3,  // 白名单限制包，发往对端后服务器关闭连接
 };
 
 // 网络数据包头部，注意字节对齐
+// 1）len字段必填写，并且需要转成网络字节序
+// 2）如果是用户协议消息，其他字段为0；如果是控制消息则根据类型填写
 #pragma pack(1)
 struct NetPkgHeader
 {
 	uint32_t len;    // 数据包总长度，包括包头+包体
-	uchar8_t type;   // 数据包类型
-	uchar8_t cmd;    // 控制信息
-	uchar8_t ver;    // 版本号，目前为0
-	uchar8_t res;    // 保留字段，目前为0
+	uchar8_t type;   // 数据包类型 NetPkgType ，用户消息包则值为 0
+	uchar8_t cmd;    // 控制信息 CtlFlag 
+	uchar8_t ver;    // 版本号，目前为 0
+	uchar8_t res;    // 保留字段，目前为 0
 	
 	NetPkgHeader() {}
-	NetPkgHeader(uint32_t _len, uchar8_t _type, uchar8_t _cmd) : len(_len), type(_type), cmd(_cmd) {}
+	NetPkgHeader(uint32_t _len, uchar8_t _type, uchar8_t _cmd) : len(_len), type(_type), cmd(_cmd), ver(0), res(0) {}
 	~NetPkgHeader() {}
 };
 #pragma pack()

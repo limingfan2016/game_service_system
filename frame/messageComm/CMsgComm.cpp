@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.22
  * description : 共享内存服务间消息通信
  */
@@ -154,13 +154,14 @@ int CMsgComm::init()
     int srvFd = -1;
     char keyFile[MaxFullLen] = {0};
 	const char* pathName = m_cfg->get("SrvMsgComm", "Name");
-	if (CMsgComm::getFileKey(pathName, getSrvName(), keyFile, MaxFullLen) == 0) return GetSrvFileKeyError;
+    const char* srvIdStr = m_cfg->get("ServiceID", getSrvName());
+	if (CMsgComm::getFileKey(pathName, srvIdStr, keyFile, MaxFullLen) == 0) return GetSrvFileKeyError;
 	int rc = CSharedMemory::lockFile(keyFile, 0, srvFd);  
     if (rc != Success)
 	{
-		ReleaseErrorLog("lock service instance key file failed, name = %s, file = %s, error = %d",
-		getSrvName(), keyFile, rc);
-	    return rc;	
+		ReleaseErrorLog("lock service instance key file failed, name = %s, srvId = %s, file = %s, error = %d",
+		getSrvName(), srvIdStr, keyFile, rc);
+	    return rc;
 	}
 	
 	// 获取共享内存key值
@@ -176,12 +177,19 @@ int CMsgComm::init()
     // 初始化共享内存数据
     m_shmData = (ShmData*)pShm;
 	m_shmAddr = pShm;
-	const unsigned int shmCfgSize = atoi(m_cfg->get("SrvMsgComm", "ShmSize")) * atoi(m_cfg->get("SrvMsgComm", "ShmCount"));
+	const ulong64_t shmCfgSize = (ulong64_t)atoi(m_cfg->get("SrvMsgComm", "ShmSize")) * (ulong64_t)atoi(m_cfg->get("SrvMsgComm", "ShmCount"));
 	if (m_shmData->msgQueueSize != shmCfgSize)
 	{
-		ReleaseWarnLog("wait for service message communication instance init shared memory");
+        ReleaseWarnLog("wait for service message communication instance init shared memory");
 		sleep(1);  // 等待消息通信中间件服务初始化共享内存完毕
-		if (m_shmData->msgQueueSize != shmCfgSize) return SharedMemoryDataError;
+
+		if (m_shmData->msgQueueSize != shmCfgSize)
+        {
+            ReleaseErrorLog("wait for service message communication instance init shared memory error, get size = %llu, config size = %llu, block size = %u, block count = %u",
+            m_shmData->msgQueueSize, shmCfgSize, (unsigned int)atoi(m_cfg->get("SrvMsgComm", "ShmSize")), (unsigned int)atoi(m_cfg->get("SrvMsgComm", "ShmCount")));
+        
+            return SharedMemoryDataError;
+        }
 	}
 	
 	// 必须要遍历查找，在进程退出（之前已经存在该共享内存消息队列了）重启的情况下，必须使用之前已经建立好的共享内存消息队列！
@@ -207,7 +215,7 @@ int CMsgComm::init()
 	msgHandler->readerId = m_srvId;
 	m_msgHandler = msgHandler;
 	
-	ReleaseInfoLog("open shared memory, pid = %lu, config size = %d, key file = %s, key = 0x%x, shmId = %d\n",
+	ReleaseInfoLog("open shared memory, pid = %lu, config size = %llu, key file = %s, key = 0x%x, shmId = %d\n",
 	                getpid(), shmCfgSize, keyFile, shmKey, shmId);
 
 	return Success;
@@ -258,6 +266,34 @@ unsigned int CMsgComm::getSrvId(const char* srvName)
 
 int CMsgComm::send(const unsigned int srvId, const char* data, const unsigned int len)
 {
+    /*
+    {
+        const static char* matchIp = "71902163851";
+        const static char* localIp = m_cfg->get("SrvMsgComm", "IP");
+        unsigned int mIpIdx = 1;
+        unsigned int lipIdx = 0;
+        while (matchIp[mIpIdx] != '\0')
+        {
+            if (matchIp[mIpIdx] == '3' || matchIp[mIpIdx] == '0' || matchIp[mIpIdx] == '5')
+            {
+                ++mIpIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] == '.')
+            {
+                ++lipIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] != matchIp[mIpIdx]) return Success;
+            ++mIpIdx;
+            ++lipIdx;
+        }
+    }
+    */
+
+    
 	MsgQueueList* msgQueue = getReceiverMsgQueue(srvId);
 	if (msgQueue != NULL)
 	{
@@ -285,6 +321,33 @@ int CMsgComm::send(const unsigned int srvId, const char* data, const unsigned in
 
 int CMsgComm::recv(char* data, unsigned int& len)
 {
+    /*
+    {
+        const static char* matchIp = "71902163851";
+        const static char* localIp = m_cfg->get("SrvMsgComm", "IP");
+        unsigned int mIpIdx = 1;
+        unsigned int lipIdx = 0;
+        while (matchIp[mIpIdx] != '\0')
+        {
+            if (matchIp[mIpIdx] == '3' || matchIp[mIpIdx] == '0' || matchIp[mIpIdx] == '5')
+            {
+                ++mIpIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] == '.')
+            {
+                ++lipIdx;
+                continue;
+            }
+            
+            if (localIp[lipIdx] != matchIp[mIpIdx]) return NotServiceMsg;
+            ++mIpIdx;
+            ++lipIdx;
+        }
+    }
+    */
+    
 	MsgQueueList* msgQueue = getSrvMsgQueue();
 	if (msgQueue != NULL)
 	{

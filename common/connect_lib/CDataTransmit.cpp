@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.06.30
  * description : 纯网络数据读写，不做数据解析、心跳监测等其他额外操作
  */
@@ -33,13 +33,13 @@ ReturnValue CDataTransmit::recv(Connect*& conn, char* data, unsigned int& len)
 {
 	// 1）先过滤掉无效的连接
 	while (m_curConn != NULL && m_curConn->logicStatus == ConnectStatus::deleted) m_curConn = m_curConn->pNext;
-	Connect* nextConn = (m_curConn != NULL) ? m_curConn->pNext : NULL;  // 必须在wait之前获取，wait之后如果m_curConn被移出队列则next已经为空了
-	
+
 	// 2）接着等待连接处理线程处理完
 	m_connMgr->waitConnecter();
-	if (m_curConn == NULL || m_curConn->readSocketTimes == 0)  // wait之后存在m_curConn可能被连接线程移出队列了
+	if (m_curConn == NULL || m_curConn->checkSocketTimes == 0)  // wait之后存在m_curConn可能被连接线程移出队列了
 	{
-		m_curConn = (nextConn != NULL) ? nextConn : m_connMgr->getMsgConnectList();  // 必须确保连接在队列中，否则会错误、无限循环
+        // wait之后可能存在多个连接被连接线程移出队列的情况，因此这里必须重新获取连接列表
+	    m_curConn = m_connMgr->getMsgConnectList();
 		if (m_curConn == NULL) return NotNetData;
 	}
 
@@ -58,6 +58,7 @@ ReturnValue CDataTransmit::recv(Connect*& conn, char* data, unsigned int& len)
 				if (dataSize > len) dataSize = len;
 				len = CDataHandler::read(m_curConn, data, dataSize);
 				
+                // 这里必须切换到下一个连接，不可以处理完当前连接的所有消息才处理下一个连接，这样会被正常的大量消息包攻击，导致其他连接玩家的消息得不到处理
 				conn = m_curConn;
 				m_curConn = m_curConn->pNext;  // 切换到下一个连接，以便均衡遍历所有连接
 				return OptSuccess;
@@ -70,7 +71,7 @@ ReturnValue CDataTransmit::recv(Connect*& conn, char* data, unsigned int& len)
 			CDataHandler::releaseWrtBuff(m_connMgr, m_curConn);
 			m_curConn->logicStatus = ConnectStatus::deleted;  // 标志此连接为无效连接，可删除了
 		}
-		
+
 		m_curConn = (m_curConn->pNext != NULL) ? m_curConn->pNext : m_connMgr->getMsgConnectList();
 		if (m_curConn == beginConn) break;  // 回到循环起点了，无可处理的消息
 	}

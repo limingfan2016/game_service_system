@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.17
  * description : 消息队列操作，单线程读&单线程写免锁
  */

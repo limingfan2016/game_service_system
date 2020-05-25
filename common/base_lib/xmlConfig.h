@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.05.08
  * description : xml解析生成代码API
  */

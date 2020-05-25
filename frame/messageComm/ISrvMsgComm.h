@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.15
  * description : 服务消息通信开发接口
  */

@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.12.05
  * description : 网络连接管理
  */
@@ -39,7 +39,9 @@ struct ServerCfgData
 	unsigned int size;              // 每个读写数据区内存块的大小
 	
 	int listenNum;                  // 监听连接的队列长度
-	int activeInterval;             // 连接活跃检测间隔时间，单位秒，超过次间隔时间无数据则关闭连接
+    unsigned int maxMsgSize;  // 最大消息包长度，单个消息包大小超过此长度则关闭连接
+    unsigned int checkConnectInterval;   // 遍历所有连接时间间隔（检查连接活跃时间、心跳信息），单位毫秒
+    unsigned int activeInterval;             // 连接活跃检测间隔时间，单位秒，超过次间隔时间无数据则关闭连接
     unsigned short checkTimes;      // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	unsigned short hbInterval;      // 心跳检测间隔时间，单位秒
 	unsigned char hbFailedTimes;    // 心跳检测连续失败hbFailedTimes次后关闭连接
@@ -51,6 +53,9 @@ class CConnectManager
 public:
 	CConnectManager(const char* ip, const int port, ILogicHandler* logicHandler);
 	~CConnectManager();
+    
+    const char* getTcpIp();
+    
 	
 public:
     int start(const ServerCfgData& cfgData);
@@ -132,7 +137,7 @@ private:
 	IdToConnect m_connectMap;         // id映射所有连接对象信息
 	Connect* m_loginConnectList;      // 主动建立的连接列表
 	Connect* m_msgConnectList;        // 建立的处理逻辑消息连接列表
-	unsigned int m_lastCheckTime;     // 上次检测连接的时间点
+	unsigned long long m_nextCheckTime;     // 下次检测连接的时间点，单位毫秒
 	
 	CMemManager* m_memForRead;        // 读socket缓冲区内存管理，连接管理线程使用
 	CMemManager* m_memForWrite;       // 写socket缓冲区内存管理，数据处理线程使用
@@ -144,7 +149,9 @@ private:
 	int m_listenNum;                  // 监听连接的队列长度
 	
 	SynNotify m_synNotify;            // 连接线程&数据处理线程同步等待&通知
-	int m_activeInterval;             // 连接活跃检测间隔时间，单位秒，超过次间隔时间无数据则关闭连接
+    unsigned int m_maxMsgSize;   // 最大消息包长度，单个消息包大小超过此长度则关闭连接
+    unsigned int m_checkConnectInterval;  // 遍历所有连接时间间隔（检查连接活跃时间、心跳信息），单位毫秒
+	unsigned int m_activeInterval;             // 连接活跃检测间隔时间，单位秒，超过此间隔时间无数据则关闭连接
 	unsigned short m_checkTimes;      // 检查最大socket无数据的次数，超过此最大次数则连接移出消息队列，避免遍历一堆无数据的空连接
 	unsigned short m_hbInterval;      // 心跳检测间隔时间，单位秒
 	unsigned char m_hbFailedTimes;    // 心跳检测连续失败hbFailedTimes次后关闭连接

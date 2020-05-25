@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.30
  * description : 服务开发API定义实现
  */
@@ -8,6 +8,8 @@
 #define CSERVICE_H
 
 #include <unordered_map>
+#include <mutex>
+
 #include "IService.h"
 #include "FrameType.h"
 #include "CNetMsgComm.h"
@@ -57,7 +59,7 @@ public:
     void run();
 	
 	// 停止服务
-	void stop();
+	void stop(int flag = 1);
 	
 	// 通知配置更新
 	void notifyUpdateConfig();
@@ -105,11 +107,19 @@ public:
 	
 	void setServiceType(unsigned int srvType);
     void setConnectClient();
+    
+    void setGatewayServiceMode(bool isGatewayMode);
+    
+public:
+    // 需要和调度线程并发加锁的，调用该函数即可
+    // 用法如下：
+    // CLockEx lock(setThreadMutexMode());
+    std::mutex* setThreadMutexMode();  // 框架调度线程和gRPC线程并发，需要加锁
 	
 public:	
     // 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
-	unsigned int setTimer(CHandler* handler, unsigned int interval, TimerHandler cbFunc, int userId = 0, void* param = NULL, unsigned int count = 1);
-	void killTimer(unsigned int timerId);
+	unsigned int setTimer(CHandler* handler, unsigned int interval, TimerHandler cbFunc, int userId = 0, void* param = NULL, unsigned int count = 1, unsigned int paramLen = 0);
+	void* killTimer(unsigned int timerId, int* userId = NULL, unsigned int* paramLen = NULL);
 	
 public:
     // 本地端准备发起主动连接
@@ -127,10 +137,9 @@ private:
 	void handleClientMessage(ClientMsgHeader* msgHeader, Connect* conn, unsigned int msgLen);
 	bool handleTimerMessage();
 	void clear();
-	
 
 private:
-    bool m_isRunning;
+    int m_runFlag;  // 服务运行标志，值0：服务运行，其他值：服务停止
 	bool m_isNotifyUpdateConfig;
     const char* m_srvName;
 	unsigned int m_srvId;
@@ -152,6 +161,9 @@ private:
 	NCommon::CAddressQueue m_activeConnectResultQueue;       // 本地端主动发起建立连接的结果
 	NCommon::CMemManager m_memForActiveConnect;              // 主动连接数据
 	NCommon::CTimer m_timer;                                 // 定时器各种操作
+    bool m_gatewayServiceMode;                               // 目标服务收到网关服务的消息时，是否使用网关代理模式
+    
+    std::mutex* m_mutex;  // 框架调度线程和gRPC线程并发，需要加锁
 	
 DISABLE_COPY_ASSIGN(CService);
 };

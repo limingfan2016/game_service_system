@@ -1,5 +1,5 @@
 
-/* author : liuxu
+/* author : admin
 * date : 2015.02.10
 * description : memcache client api
 */

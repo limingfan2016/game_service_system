@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.30
  * description : 服务开发模块API定义实现
  */
@@ -108,6 +108,7 @@ int CModule::onServiceMessage(const char* msgData, const unsigned int msgLen, co
 	}
 	
 	// 填写消息上下文信息
+    m_context.msgId = msgId;
 	m_context.srcSrvId = srcSrvId;
 	m_context.srcSrvType = srcSrvType;
 	m_context.srcModuleId = srcModuleId;
@@ -128,6 +129,7 @@ int CModule::onServiceMessage(const char* msgData, const unsigned int msgLen, co
 	m_msgType = MessageType::InnerServiceMsg;
 	(handlerIt->second.instance->*(handlerIt->second.handler))(msgData, msgLen, srcSrvId, srcModuleId, srcProtocolId);
 	
+    m_context.msgId = 0;
 	m_context.dstProtocolId = (unsigned short)-1;
 	m_context.userData[0] = '\0';
 	m_context.userDataLen = 0;
@@ -166,9 +168,9 @@ unsigned short CModule::getModuleId()
 	return m_moduleId;
 }
 
-void CModule::stopService()
+void CModule::stopService(int flag)
 {
-	return m_service->stop();
+	return m_service->stop(flag);
 }
 	
 // 当前消息上下文内容
@@ -206,7 +208,7 @@ int CModule::registerProtocol(unsigned int srcSrvType, unsigned short protocolId
 int CModule::sendMessage(const char* msgData, const unsigned int msgLen, const char* userData, const unsigned int userDataLen,
 				         unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId, unsigned short handleProtocolId)
 {
-	int rc = m_service->sendMessage(msgData, msgLen, userData, userDataLen, m_context.srvAsyncDataFlag, m_context.srvAsyncDataFlagLen, dstServiceId, dstProtocolId, dstModuleId, m_moduleId, handleProtocolId, m_context.userFlag);
+	int rc = m_service->sendMessage(msgData, msgLen, userData, userDataLen, m_context.srvAsyncDataFlag, m_context.srvAsyncDataFlagLen, dstServiceId, dstProtocolId, dstModuleId, m_moduleId, handleProtocolId, m_context.userFlag, m_context.msgId);
 	if (rc != Success) ReleaseErrorLog("send service message error1, msgLen = %u, dstServiceId = %d, dstProtocolId = %d, rc = %d", msgLen, dstServiceId, dstProtocolId, rc);
 	return rc;
 }
@@ -216,6 +218,7 @@ int CModule::sendMessage(const char* msgData, const unsigned int msgLen, const c
 int CModule::sendMessage(const char* msgData, const unsigned int msgLen, int userFlag, const char* userData, const unsigned int userDataLen,
 				         unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId, unsigned short handleProtocolId, unsigned int msgId)
 {
+    if (msgId == 0) msgId = m_context.msgId;
 	int rc = m_service->sendMessage(msgData, msgLen, userData, userDataLen, m_context.srvAsyncDataFlag, m_context.srvAsyncDataFlagLen, dstServiceId, dstProtocolId, dstModuleId, m_moduleId, handleProtocolId, userFlag, msgId);
 	if (rc != Success) ReleaseErrorLog("send service message error2, msgLen = %u, dstServiceId = %d, dstProtocolId = %d, rc = %d", msgLen, dstServiceId, dstProtocolId, rc);
 	return rc;
@@ -226,7 +229,7 @@ int CModule::sendMessage(const char* msgData, const unsigned int msgLen, int use
 int CModule::sendMessage(const char* msgData, const unsigned int msgLen, unsigned int dstServiceId, unsigned short dstProtocolId,
                          unsigned short dstModuleId, unsigned short handleProtocolId)
 {
-	int rc = m_service->sendMessage(msgData, msgLen, m_context.userData, m_context.userDataLen, m_context.srvAsyncDataFlag, m_context.srvAsyncDataFlagLen, dstServiceId, dstProtocolId, dstModuleId, m_moduleId, handleProtocolId, m_context.userFlag);
+	int rc = m_service->sendMessage(msgData, msgLen, m_context.userData, m_context.userDataLen, m_context.srvAsyncDataFlag, m_context.srvAsyncDataFlagLen, dstServiceId, dstProtocolId, dstModuleId, m_moduleId, handleProtocolId, m_context.userFlag, m_context.msgId);
 	if (rc != Success) ReleaseErrorLog("send service message error3, msgLen = %u, dstServiceId = %d, dstProtocolId = %d, rc = %d", msgLen, dstServiceId, dstProtocolId, rc);
 	return rc;
 }
@@ -236,21 +239,27 @@ int CModule::sendMessage(const char* msgData, const unsigned int msgLen, unsigne
 int CModule::sendMessage(const char* msgData, const unsigned int msgLen, unsigned short srcServiceType, unsigned int srcServiceId, unsigned short srcServiceProtocolId,
 	                     unsigned int dstServiceId, unsigned short dstProtocolId, unsigned short dstModuleId, unsigned int msgId)
 {
+    if (msgId == 0) msgId = m_context.msgId;
 	int rc = m_service->sendMessage(srcServiceType, srcServiceId, msgData, msgLen, m_context.userData, m_context.userDataLen, m_context.srvAsyncDataFlag, m_context.srvAsyncDataFlagLen, dstServiceId, dstProtocolId, dstModuleId, 0, srcServiceProtocolId, m_context.userFlag, msgId);
 	if (rc != Success) ReleaseErrorLog("send service message error4, msgLen = %u, dstServiceId = %d, dstProtocolId = %d, rc = %d", msgLen, dstServiceId, dstProtocolId, rc);
 	return rc;
 }
 
-// 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
-unsigned int CModule::setTimer(unsigned int interval, TimerHandler timerHandler, int userId, void* param, unsigned int count, CHandler* instance)
+std::mutex* CModule::setThreadMutexMode()
 {
-	if (instance == NULL) instance = this;
-	return m_service->setTimer(instance, interval, timerHandler, userId, param, count);
+    return m_service->setThreadMutexMode();
 }
 
-void CModule::killTimer(unsigned int timerId)
+// 定时器设置，返回定时器ID，返回 0 表示设置定时器失败
+unsigned int CModule::setTimer(unsigned int interval, TimerHandler timerHandler, int userId, void* param, unsigned int count, CHandler* instance, unsigned int paramLen)
 {
-	m_service->killTimer(timerId);
+	if (instance == NULL) instance = this;
+	return m_service->setTimer(instance, interval, timerHandler, userId, param, count, paramLen);
+}
+
+void* CModule::killTimer(unsigned int timerId, int* userId, unsigned int* paramLen)
+{
+	return m_service->killTimer(timerId, userId, paramLen);
 }
 
 // 服务启动，做初始化工作

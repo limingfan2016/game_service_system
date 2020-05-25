@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2015.01.22
  * description : 共享内存服务间消息通信
  */

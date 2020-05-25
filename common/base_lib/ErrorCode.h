@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.10.15
  * description : 各个模块，各种函数，返回码、错误码定义，统一管理
  */

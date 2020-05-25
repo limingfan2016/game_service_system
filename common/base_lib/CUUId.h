@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.11.19
  * description : UUID唯一生成管理实现
  */

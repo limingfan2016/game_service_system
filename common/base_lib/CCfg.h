@@ -1,5 +1,5 @@
 
-/* author : limingfan
+/* author : admin
  * date : 2014.10.27
  * description : 配置文件解析读取配置项
  */
@@ -85,6 +85,9 @@ public:
 	const char* getKeyByValue(const char* section, const char* value);
 	const char* getKeyByValue(const char* section, const int value);
 	
+public:
+    const char* getFileName() const;
+    
 	void reLoad();
 
 public:
